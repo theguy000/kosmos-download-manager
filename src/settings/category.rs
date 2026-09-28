@@ -65,13 +65,15 @@ impl Category {
     }
 }
 
-impl From<i32> for Category {
-    fn from(index: i32) -> Self {
+impl TryFrom<i32> for Category {
+    type Error = i32;
+
+    fn try_from(index: i32) -> Result<Self, Self::Error> {
         usize::try_from(index)
             .ok()
             .and_then(|index| Self::ALL.get(index))
             .copied()
-            .unwrap_or(Self::General)
+            .ok_or(index)
     }
 }
 

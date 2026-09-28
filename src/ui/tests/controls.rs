@@ -4,6 +4,7 @@ use crate::platform::default_download_directory;
 use crate::settings::SaveSettings;
 use crate::ui::handlers::actions::send_action;
 use crate::ui::handlers::delete::complete_history_delete;
+use crate::ui::handlers::sidebar::update_sidebar_categories;
 use crate::ui::projection::{history_table_item, update_window_state};
 use crate::ui::view::{MainWindow, TableItem};
 use slint::ComponentHandle;
@@ -17,6 +18,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
     let (window, clipboard) = install_test_platform()?;
     let ui = MainWindow::new()?;
     ui.show()?;
+    update_sidebar_categories(&ui, &SaveSettings::default());
     let click = |x, y| {
         let position = slint::LogicalPosition::new(x, y);
         window.dispatch_event(WindowEvent::PointerPressed {

@@ -2,7 +2,7 @@ use crate::engine::DownloadStatus;
 use crate::platform::open_file;
 use crate::ui::projection::{category_matches_id, sort_items};
 use crate::ui::state::AppState;
-use crate::ui::view::{MainWindow, TableItem};
+use crate::ui::view::{MainWindow, Navigation, TableItem};
 use slint::ComponentHandle;
 use slint::Model;
 use std::path::Path;
@@ -13,8 +13,9 @@ pub(crate) fn update_selection_state(window: &MainWindow, selected_id: i32) {
         return;
     }
     let category = window.get_selected_category();
+    let nav = window.global::<Navigation>();
     let is_valid = window.get_sample_downloads().iter().any(|item| {
-        item.id == selected_id && category_matches_id(category, item.category_id, true)
+        item.id == selected_id && category_matches_id(&nav, category, item.category_id, true)
     });
     window.set_history_row_selected(is_valid);
 }
@@ -23,6 +24,7 @@ pub(crate) fn update_selection_state(window: &MainWindow, selected_id: i32) {
 /// downloads the current category shows.
 fn listed_row_ids(window: &MainWindow) -> Vec<i32> {
     let category = window.get_selected_category();
+    let nav = window.global::<Navigation>();
     let mut ids = Vec::new();
     if window.get_active_row_visible() {
         ids.push(0);
@@ -31,7 +33,7 @@ fn listed_row_ids(window: &MainWindow) -> Vec<i32> {
         window
             .get_sample_downloads()
             .iter()
-            .filter(|item| category_matches_id(category, item.category_id, true))
+            .filter(|item| category_matches_id(&nav, category, item.category_id, true))
             .map(|item| item.id),
     );
     ids

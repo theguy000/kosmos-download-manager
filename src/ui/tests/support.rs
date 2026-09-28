@@ -1,7 +1,9 @@
 use crate::history::HistoryEntry;
-use crate::ui::view::MainWindow;
+use crate::settings::Category;
+use crate::ui::view::{CategoryOption, MainWindow};
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Clipboard, Platform, WindowAdapter};
+use slint::{Model, ModelRc};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -17,41 +19,63 @@ pub(super) fn finished_entry(id: i32, filename: &str, total_bytes: u64) -> Histo
     }
 }
 
-pub(super) fn replace_category_value(
-    model: &slint::ModelRc<slint::SharedString>,
-    category: usize,
-    value: &str,
-) -> slint::ModelRc<slint::SharedString> {
-    use slint::Model;
-    let mut values: Vec<slint::SharedString> = model.iter().collect();
-    if let Some(slot) = values.get_mut(category) {
-        *slot = value.into();
+/// The dialog's default working rows, mirroring what Rust loads from default settings.
+pub(super) fn default_option_categories() -> Vec<CategoryOption> {
+    Category::ALL
+        .iter()
+        .map(|&category| CategoryOption {
+            id: category.category_id(),
+            name: category.display_name().into(),
+            dir: slint::SharedString::new(),
+            file_types: category.extensions().join(", ").into(),
+            enabled: true,
+        })
+        .collect()
+}
+
+fn ensure_categories(ui: &MainWindow) -> Vec<CategoryOption> {
+    let categories: Vec<CategoryOption> = ui.get_options_categories().iter().collect();
+    if categories.is_empty() {
+        default_option_categories()
+    } else {
+        categories
     }
-    slint::ModelRc::from(values.as_slice())
+}
+
+fn update_category(ui: &MainWindow, category: usize, edit: impl FnOnce(&mut CategoryOption)) {
+    let mut categories = ensure_categories(ui);
+    if let Some(option) = categories.get_mut(category) {
+        edit(option);
+    }
+    ui.set_options_categories(ModelRc::from(categories.as_slice()));
 }
 
 pub(super) fn option_dir(ui: &MainWindow, category: usize) -> slint::SharedString {
-    use slint::Model;
-    ui.get_options_category_dirs()
+    ui.get_options_categories()
         .row_data(category)
+        .map(|option| option.dir)
         .unwrap_or_default()
 }
 
 pub(super) fn set_option_dir(ui: &MainWindow, category: usize, value: &str) {
-    let model = replace_category_value(&ui.get_options_category_dirs(), category, value);
-    ui.set_options_category_dirs(model);
+    update_category(ui, category, |option| option.dir = value.into());
 }
 
 pub(super) fn option_file_types(ui: &MainWindow, category: usize) -> slint::SharedString {
-    use slint::Model;
-    ui.get_options_category_file_types()
+    ui.get_options_categories()
         .row_data(category)
+        .map(|option| option.file_types)
         .unwrap_or_default()
 }
 
 pub(super) fn set_option_file_types(ui: &MainWindow, category: usize, value: &str) {
-    let model = replace_category_value(&ui.get_options_category_file_types(), category, value);
-    ui.set_options_category_file_types(model);
+    update_category(ui, category, |option| option.file_types = value.into());
+}
+
+pub(super) fn option_enabled(ui: &MainWindow, category: usize) -> bool {
+    ui.get_options_categories()
+        .row_data(category)
+        .is_some_and(|option| option.enabled)
 }
 
 pub(super) type TestContext = (Rc<MinimalSoftwareWindow>, Rc<RefCell<String>>);

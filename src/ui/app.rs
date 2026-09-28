@@ -2,14 +2,13 @@ use super::handlers::actions::bind_action_handlers;
 use super::handlers::columns::{bind_column_handlers, init_columns, start_column_widths_worker};
 use super::handlers::delete::{DeleteTarget, PendingDelete, bind_delete_handlers};
 use super::handlers::options::bind_options_handlers;
+use super::handlers::sidebar::update_sidebar_categories;
 use super::handlers::table::{bind_table_handlers, resort, update_selection_state};
 use super::projection::{history_table_item, should_project_snapshot, update_window_state};
 use super::state::AppState;
 use super::view::MainWindow;
 use crate::engine::{DownloadAction, DownloadSnapshot, DownloadStatus};
-use crate::settings::Category;
 use slint::ComponentHandle;
-use std::rc::Rc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 
@@ -30,12 +29,7 @@ pub fn run_app(
             .into(),
     );
     main_window.set_startup_option_visible(cfg!(windows));
-
-    let category_names: Vec<slint::SharedString> = Category::ALL
-        .iter()
-        .map(|category| category.display_name().into())
-        .collect();
-    main_window.set_options_category_names(Rc::new(slint::VecModel::from(category_names)).into());
+    update_sidebar_categories(&main_window, &state.save_settings.borrow());
 
     {
         let settings = state.save_settings.borrow();

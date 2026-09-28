@@ -1,0 +1,16 @@
+export global Navigation {
+    out property <int> all: 0;
+    out property <int> first-category: 1;
+    out property <int> last-category: 11;
+    out property <int> unfinished: last-category + 1;
+    out property <int> finished: unfinished + 1;
+    out property <int> grabber: finished + 1;
+    out property <int> queues: grabber + 1;
+
+    public pure function category_matches(category: int, item_category: int, completed: bool) -> bool {
+        return category == all
+            || (category >= first-category && category <= last-category && category == item_category)
+            || (category == unfinished && !completed)
+            || (category == finished && completed);
+    }
+}

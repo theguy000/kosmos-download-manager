@@ -1,46 +1,95 @@
+use super::sidebar::update_sidebar_categories;
 use super::table::{resort, update_selection_state};
 use crate::platform::{default_download_directory, set_startup_enabled, startup_enabled};
 use crate::settings::{Category, SaveSettings};
 use crate::ui::projection::history_table_item;
 use crate::ui::state::AppState;
-use crate::ui::view::MainWindow;
+use crate::ui::view::{CategoryOption, ComboItem, MainWindow};
 use slint::ComponentHandle;
 use slint::Model;
 use std::path::{Path, PathBuf};
 
-fn window_category_dir(window: &MainWindow, category: Category) -> slint::SharedString {
-    window
-        .get_options_category_dirs()
-        .row_data(category.category_id() as usize)
+fn options_snapshot(window: &MainWindow) -> Vec<CategoryOption> {
+    window.get_options_categories().iter().collect()
+}
+
+fn set_options(window: &MainWindow, categories: &[CategoryOption]) {
+    window.set_options_categories(slint::ModelRc::from(categories));
+}
+
+fn category_dir(categories: &[CategoryOption], category: Category) -> slint::SharedString {
+    categories
+        .get(category.category_id() as usize)
+        .map(|option| option.dir.clone())
         .unwrap_or_default()
 }
 
-fn set_window_category_dir(window: &MainWindow, category: Category, value: slint::SharedString) {
-    let mut dirs: Vec<slint::SharedString> = window.get_options_category_dirs().iter().collect();
-    if let Some(dir) = dirs.get_mut(category.category_id() as usize) {
-        *dir = value;
+fn update_option(window: &MainWindow, category: Category, edit: impl FnOnce(&mut CategoryOption)) {
+    let mut categories = options_snapshot(window);
+    if let Some(option) = categories
+        .iter_mut()
+        .find(|option| option.id == category.category_id())
+    {
+        edit(option);
     }
-    window.set_options_category_dirs(slint::ModelRc::from(dirs.as_slice()));
+    set_options(window, &categories);
 }
 
-fn window_category_file_types(window: &MainWindow, category: Category) -> slint::SharedString {
-    window
-        .get_options_category_file_types()
-        .row_data(category.category_id() as usize)
-        .unwrap_or_default()
+fn category_action(enabled: bool) -> (&'static str, &'static str) {
+    if enabled {
+        ("close", "Disable category")
+    } else {
+        ("plus", "Enable category")
+    }
 }
 
-fn set_window_category_file_types(
-    window: &MainWindow,
-    category: Category,
-    value: slint::SharedString,
-) {
-    let mut types: Vec<slint::SharedString> =
-        window.get_options_category_file_types().iter().collect();
-    if let Some(file_types) = types.get_mut(category.category_id() as usize) {
-        *file_types = value;
+/// Projects the current category rows into the generic combo's display items.
+pub(crate) fn update_options_combo_items(window: &MainWindow) {
+    let items: Vec<ComboItem> = window
+        .get_options_categories()
+        .iter()
+        .map(|option| {
+            let (action_icon, action_label) = if option.id == Category::General.category_id() {
+                ("", "")
+            } else {
+                category_action(option.enabled)
+            };
+            ComboItem {
+                text: option.name.clone(),
+                action_icon: action_icon.into(),
+                action_label: action_label.into(),
+            }
+        })
+        .collect();
+    window.set_options_combo_items(slint::ModelRc::from(items.as_slice()));
+}
+
+/// Loads the persisted categories into the dialog's working rows.
+pub(crate) fn load_options_categories(window: &MainWindow, settings: &SaveSettings) {
+    let categories: Vec<CategoryOption> = Category::ALL
+        .iter()
+        .map(|&category| CategoryOption {
+            id: category.category_id(),
+            name: category.display_name().into(),
+            dir: settings
+                .category_path(category)
+                .to_string_lossy()
+                .as_ref()
+                .into(),
+            file_types: settings.extensions_for(category).join(", ").into(),
+            enabled: settings.is_category_active(category),
+        })
+        .collect();
+    set_options(window, &categories);
+    update_options_combo_items(window);
+}
+
+pub(crate) fn toggle_category_list(window: &MainWindow, category: Category) {
+    if category == Category::General {
+        return;
     }
-    window.set_options_category_file_types(slint::ModelRc::from(types.as_slice()));
+    update_option(window, category, |option| option.enabled = !option.enabled);
+    update_options_combo_items(window);
 }
 
 pub(crate) fn update_category_defaults(
@@ -48,23 +97,25 @@ pub(crate) fn update_category_defaults(
     old_default: &Path,
     new_default: &Path,
 ) {
-    for category in Category::ALL {
+    let mut categories = options_snapshot(window);
+    for option in &mut categories {
+        let Ok(category) = Category::try_from(option.id) else {
+            continue;
+        };
         if category == Category::General {
             continue;
         }
-        let current_val = window_category_dir(window, category);
-        let current_path = Path::new(current_val.as_str());
-        let old_sub = SaveSettings::default_subfolder(old_default, category);
-        let next = if current_val.is_empty() || current_path == old_sub {
-            SaveSettings::default_subfolder(new_default, category)
+        let current_path = Path::new(option.dir.as_str());
+        if option.dir.is_empty()
+            || current_path == SaveSettings::default_subfolder(old_default, category)
+        {
+            option.dir = SaveSettings::default_subfolder(new_default, category)
                 .to_string_lossy()
                 .as_ref()
-                .into()
-        } else {
-            current_val
-        };
-        set_window_category_dir(window, category, next);
+                .into();
+        }
     }
+    set_options(window, &categories);
 }
 
 pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
@@ -73,25 +124,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
         let save_settings = state.save_settings.clone();
         window.on_options_opened(move || {
             if let Some(window) = window_weak.upgrade() {
-                let settings = save_settings.borrow();
-                for category in Category::ALL {
-                    set_window_category_dir(
-                        &window,
-                        category,
-                        settings
-                            .category_path(category)
-                            .to_string_lossy()
-                            .as_ref()
-                            .into(),
-                    );
-                    if category != Category::General {
-                        set_window_category_file_types(
-                            &window,
-                            category,
-                            settings.extensions_for(category).join(", ").into(),
-                        );
-                    }
-                }
+                load_options_categories(&window, &save_settings.borrow());
             }
 
             let window_weak = window_weak.clone();
@@ -105,6 +138,18 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     }
                 });
             });
+        });
+    }
+
+    {
+        let window_weak = window.as_weak();
+        window.on_toggle_options_category_list(move |cat_id| {
+            let Ok(category) = Category::try_from(cat_id) else {
+                return;
+            };
+            if let Some(window) = window_weak.upgrade() {
+                toggle_category_list(&window, category);
+            }
         });
     }
 
@@ -126,15 +171,18 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
 
     {
         let window_weak = window.as_weak();
-        window.on_browse_options_folder(move |cat_idx| {
+        window.on_browse_options_folder(move |cat_id| {
+            let Ok(category) = Category::try_from(cat_id) else {
+                return;
+            };
             if let Some(window) = window_weak.upgrade() {
-                let category = Category::from(cat_idx);
-                let current_str = window_category_dir(&window, category);
+                let categories = options_snapshot(&window);
+                let current_str = category_dir(&categories, category);
                 let start_dir =
                     if !current_str.is_empty() && Path::new(current_str.as_str()).exists() {
                         PathBuf::from(current_str.as_str())
                     } else {
-                        let def = window_category_dir(&window, Category::General);
+                        let def = category_dir(&categories, Category::General);
                         if !def.is_empty() && Path::new(def.as_str()).exists() {
                             PathBuf::from(def.as_str())
                         } else {
@@ -146,13 +194,12 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     .set_directory(&start_dir)
                     .pick_folder()
                 {
-                    let folder_str: slint::SharedString = folder.to_string_lossy().as_ref().into();
+                    let old_default = category_dir(&categories, Category::General);
+                    update_option(&window, category, |option| {
+                        option.dir = folder.to_string_lossy().as_ref().into();
+                    });
                     if category == Category::General {
-                        let old_default = window_category_dir(&window, Category::General);
-                        set_window_category_dir(&window, Category::General, folder_str);
                         update_category_defaults(&window, Path::new(old_default.as_str()), &folder);
-                    } else {
-                        set_window_category_dir(&window, category, folder_str);
                     }
                 }
             }
@@ -161,17 +208,18 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
 
     {
         let window_weak = window.as_weak();
-        window.on_reset_options_category_default(move |cat_idx| {
+        window.on_reset_options_category_default(move |cat_id| {
+            let Ok(category) = Category::try_from(cat_id) else {
+                return;
+            };
             if let Some(window) = window_weak.upgrade() {
-                let category = Category::from(cat_idx);
+                let categories = options_snapshot(&window);
                 if category == Category::General {
-                    let old_default = window_category_dir(&window, Category::General);
+                    let old_default = category_dir(&categories, Category::General);
                     let new_default = default_download_directory();
-                    set_window_category_dir(
-                        &window,
-                        Category::General,
-                        new_default.to_string_lossy().as_ref().into(),
-                    );
+                    update_option(&window, category, |option| {
+                        option.dir = new_default.to_string_lossy().as_ref().into();
+                    });
                     update_category_defaults(
                         &window,
                         Path::new(old_default.as_str()),
@@ -179,13 +227,13 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     );
                 } else {
                     let default_dir =
-                        PathBuf::from(window_category_dir(&window, Category::General).as_str());
-                    let subfolder = SaveSettings::default_subfolder(&default_dir, category);
-                    set_window_category_dir(
-                        &window,
-                        category,
-                        subfolder.to_string_lossy().as_ref().into(),
-                    );
+                        PathBuf::from(category_dir(&categories, Category::General).as_str());
+                    update_option(&window, category, |option| {
+                        option.dir = SaveSettings::default_subfolder(&default_dir, category)
+                            .to_string_lossy()
+                            .as_ref()
+                            .into();
+                    });
                 }
             }
         });
@@ -198,7 +246,8 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
         let download_history = state.download_history.clone();
         window.on_commit_options(move |enabled| {
             if let Some(window) = window_weak.upgrade() {
-                let default_dir_raw = window_category_dir(&window, Category::General);
+                let categories = options_snapshot(&window);
+                let default_dir_raw = category_dir(&categories, Category::General);
                 let default_dir_trimmed = default_dir_raw.trim();
                 let default_dir = if default_dir_trimmed.is_empty() {
                     default_download_directory()
@@ -210,27 +259,25 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     default_dir: default_dir.clone(),
                     ..Default::default()
                 };
-                for category in Category::ALL {
-                    if category == Category::General {
-                        continue;
-                    }
-                    new_settings.set_category_dir(
-                        category,
-                        SaveSettings::category_override(
-                            &window_category_dir(&window, category),
-                            &default_dir,
+                for option in &categories {
+                    if let Ok(category) = Category::try_from(option.id)
+                        && category != Category::General
+                    {
+                        new_settings.set_category_dir(
                             category,
-                        ),
-                    );
-                    if let Some(extensions) = SaveSettings::file_type_override(
-                        category,
-                        window_category_file_types(&window, category).as_str(),
-                    ) {
-                        new_settings.file_types.insert(category, extensions);
+                            SaveSettings::category_override(&option.dir, &default_dir, category),
+                        );
+                        if let Some(extensions) =
+                            SaveSettings::file_type_override(category, &option.file_types)
+                        {
+                            new_settings.file_types.insert(category, extensions);
+                        }
+                        new_settings.set_category_enabled(category, option.enabled);
                     }
                 }
 
                 *save_settings.borrow_mut() = new_settings.clone();
+                update_sidebar_categories(&window, &new_settings);
                 window.set_dest_dir_text(default_dir.to_string_lossy().as_ref().into());
 
                 {

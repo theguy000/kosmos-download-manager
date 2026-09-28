@@ -1,5 +1,5 @@
 use super::format::{format_bytes, format_eta, format_speed};
-use super::view::{MainWindow, Palette};
+use super::view::{MainWindow, Navigation, Palette};
 use crate::engine::{DownloadSnapshot, DownloadStatus};
 use crate::history::{HistoryEntry, downloaded_label, now_unix_ms};
 use crate::settings::SaveSettings;
@@ -13,14 +13,25 @@ pub(super) fn should_project_snapshot<T>(snapshot: &watch::Ref<'_, T>, initial: 
     should_project
 }
 
-pub(super) fn category_matches_id(filter_id: i32, category_id: i32, completed: bool) -> bool {
-    match filter_id {
-        1..=11 => filter_id == category_id,
-        12 => !completed,
-        13 => completed,
-        14 | 15 => false,
-        _ => true,
+pub(super) fn category_matches_id(
+    nav: &Navigation,
+    filter_id: i32,
+    category_id: i32,
+    completed: bool,
+) -> bool {
+    if filter_id == nav.get_all() {
+        return true;
     }
+    if (nav.get_first_category()..=nav.get_last_category()).contains(&filter_id) {
+        return filter_id == category_id;
+    }
+    if filter_id == nav.get_unfinished() {
+        return !completed;
+    }
+    if filter_id == nav.get_grabber() || filter_id == nav.get_queues() {
+        return false;
+    }
+    filter_id == nav.get_finished() && completed
 }
 
 pub(super) fn history_table_item(

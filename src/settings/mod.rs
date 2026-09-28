@@ -8,7 +8,7 @@ pub(crate) use table::TableColumnWidths;
 
 use crate::platform::default_download_directory;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 const SETTINGS_FILE_NAME: &str = "save_settings.json";
@@ -21,6 +21,10 @@ pub struct SaveSettings {
     /// Extension lists that override the built-in defaults, keyed by category.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub file_types: BTreeMap<Category, Vec<String>>,
+    /// Categories removed from the sidebar. Their saved file types stay so re-enabling restores
+    /// the user's own list.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub disabled_categories: BTreeSet<Category>,
 }
 
 impl Default for SaveSettings {
@@ -29,6 +33,7 @@ impl Default for SaveSettings {
             default_dir: default_download_directory(),
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
+            disabled_categories: BTreeSet::new(),
         }
     }
 }
@@ -102,6 +107,24 @@ impl SaveSettings {
         )
     }
 
+    /// Returns whether the category takes part in routing and appears in the sidebar.
+    #[must_use]
+    pub fn is_category_active(&self, category: Category) -> bool {
+        category == Category::General || !self.disabled_categories.contains(&category)
+    }
+
+    /// Enables or disables a category without touching its saved file types.
+    pub fn set_category_enabled(&mut self, category: Category, enabled: bool) {
+        if category == Category::General {
+            return;
+        }
+        if enabled {
+            self.disabled_categories.remove(&category);
+        } else {
+            self.disabled_categories.insert(category);
+        }
+    }
+
     /// Parses a comma, semicolon, or whitespace separated extension list into unique lowercase
     /// tokens without surrounding dots.
     #[must_use]
@@ -146,6 +169,9 @@ impl SaveSettings {
     }
 
     fn has_extension(&self, category: Category, extension: &str) -> bool {
+        if !self.is_category_active(category) {
+            return false;
+        }
         self.file_types.get(&category).map_or_else(
             || {
                 Category::extensions(category)
@@ -168,12 +194,14 @@ impl SaveSettings {
         self.category_path(category)
     }
 
-    /// Checks if a path matches the default directory or any configured/default category path.
+    /// Checks if a path matches the default directory or any enabled category path.
     #[must_use]
     pub fn is_managed_path(&self, path: &Path) -> bool {
         path == self.default_dir
             || Category::ALL.iter().any(|&category| {
-                category != Category::General && path == self.category_path(category)
+                category != Category::General
+                    && self.is_category_active(category)
+                    && path == self.category_path(category)
             })
     }
 
@@ -206,6 +234,7 @@ impl SaveSettings {
         settings
             .category_dirs
             .retain(|_, path| !path.as_os_str().is_empty());
+        settings.disabled_categories.remove(&Category::General);
         Some(settings)
     }
 
@@ -249,6 +278,7 @@ mod tests {
                 (Category::Music, PathBuf::from("D:\\Music")),
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
+            disabled_categories: BTreeSet::from([Category::Torrents]),
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -343,15 +373,15 @@ mod tests {
     }
 
     #[test]
-    fn test_category_from_trait() {
+    fn test_category_try_from_id() {
         for (index, category) in Category::ALL.iter().enumerate() {
-            assert_eq!(Category::from(index as i32), *category);
+            assert_eq!(Category::try_from(index as i32), Ok(*category));
             assert_eq!(category.category_id(), index as i32);
             assert!(!category.as_str().is_empty());
             assert!(!category.display_name().is_empty());
         }
-        assert_eq!(Category::from(99), Category::General);
-        assert_eq!(Category::from(-1), Category::General);
+        assert_eq!(Category::try_from(99), Err(99));
+        assert_eq!(Category::try_from(-1), Err(-1));
     }
 
     #[test]
@@ -424,7 +454,63 @@ mod tests {
         assert_eq!(
             SaveSettings::file_type_override(Category::Music, ""),
             Some(Vec::new()),
-            "Clearing the field disables the category instead of restoring defaults"
+            "An empty list is a valid override that routes no extensions"
+        );
+    }
+
+    #[test]
+    fn test_category_enabled_state() {
+        let mut settings = SaveSettings::default();
+        assert!(settings.is_category_active(Category::General));
+        assert!(settings.is_category_active(Category::Compressed));
+
+        settings.set_category_enabled(Category::Compressed, false);
+        assert!(!settings.is_category_active(Category::Compressed));
+        assert_eq!(
+            settings.category_for_filename("archive.zip"),
+            Category::General
+        );
+        assert!(
+            settings
+                .extensions_for(Category::Compressed)
+                .contains(&"zip".into()),
+            "Disabling a category keeps its file types"
+        );
+
+        settings.set_category_enabled(Category::Compressed, true);
+        assert!(settings.is_category_active(Category::Compressed));
+        assert_eq!(
+            settings.category_for_filename("archive.zip"),
+            Category::Compressed
+        );
+
+        settings.set_category_enabled(Category::General, false);
+        assert!(settings.is_category_active(Category::General));
+        assert!(settings.disabled_categories.is_empty());
+    }
+
+    #[test]
+    fn test_disabled_category_keeps_custom_list_and_drops_managed_path() {
+        let mut settings = SaveSettings {
+            default_dir: PathBuf::from("D:\\Downloads"),
+            ..Default::default()
+        };
+        settings
+            .file_types
+            .insert(Category::Compressed, vec!["x".into()]);
+        settings.set_category_enabled(Category::Compressed, false);
+
+        assert_eq!(
+            settings.extensions_for(Category::Compressed),
+            vec!["x".to_string()]
+        );
+        assert_eq!(
+            settings.category_for_filename("archive.x"),
+            Category::General
+        );
+        assert!(
+            !settings.is_managed_path(Path::new("D:\\Downloads\\Compressed")),
+            "A disabled category's folder is no longer managed"
         );
     }
 }

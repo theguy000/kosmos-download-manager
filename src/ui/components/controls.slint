@@ -1,10 +1,24 @@
 import { Palette } from "theme.slint";
 import { ScrollView, Slider } from "std-widgets.slint";
-import { IconChevronDown, IconChevronRight, IconClose } from "icons.slint";
+import { IconChevronDown, IconChevronRight, IconClose, IconPlus } from "icons.slint";
 
 // Single focus-indicator color for the whole app.
 export global FocusStyle {
     out property <color> ring: Palette.accent;
+}
+
+// One row of a DialogComboBox. An empty action_icon means the row has no trailing action button.
+export struct ComboItem {
+    text: string,
+    action_icon: string,
+    action_label: string,
+}
+
+export global Metrics {
+    out property <length> category-row-height: 26px;
+    out property <length> combo-row-height: 28px;
+    out property <length> combo-action-size: 20px;
+    out property <length> combo-action-gutter: 28px;
 }
 
 export component CategoryRow inherits Rectangle {
@@ -25,7 +39,7 @@ export component CategoryRow inherits Rectangle {
         }
     }
 
-    height: 26px;
+    height: Metrics.category-row-height;
     background: !root.enabled ? transparent : (root.selected ? Palette.selection : (touch.has-hover ? Palette.hover-subtle : transparent));
     border-width: root.enabled && focus.has-focus ? 1px : 0px;
     border-color: FocusStyle.ring;
@@ -641,10 +655,13 @@ export component DialogSlider inherits Rectangle {
 
 export component DialogComboBox inherits Rectangle {
     in property <string> label: "";
-    in property <[string]> items;
+    in property <[ComboItem]> items;
     in-out property <int> current_index: 0;
     out property <bool> has_keyboard_focus: combo_focus.has-focus;
     callback selected(int);
+    callback item_action_clicked(int);
+    /// Returns whether the key was handled. The parent owns the action key bindings.
+    callback item_action_shortcut(int, string) -> bool;
     public function take-focus() {
         root.keyboard_focused = true;
         combo_focus.focus();
@@ -659,7 +676,7 @@ export component DialogComboBox inherits Rectangle {
     forward-focus: combo_focus;
     accessible-role: combobox;
     accessible-label: root.label;
-    accessible-value: root.items[root.current_index];
+    accessible-value: root.items[root.current_index].text;
 
     HorizontalLayout {
         padding-left: 10px;
@@ -667,7 +684,7 @@ export component DialogComboBox inherits Rectangle {
         spacing: 6px;
 
         Text {
-            text: root.items[root.current_index];
+            text: root.items[root.current_index].text;
             font-size: 12px;
             color: Palette.text-primary;
             vertical-alignment: center;
@@ -728,7 +745,7 @@ export component DialogComboBox inherits Rectangle {
         y: root.height;
         width: root.width;
         // ponytail: cap at 8 rows so the popup fits the 420px minimum window; the rest scroll.
-        height: min(8, root.items.length) * 28px + 8px;
+        height: min(8, root.items.length) * Metrics.combo-row-height + 8px;
         close-policy: close-on-click-outside;
         forward-focus: popup_focus;
 
@@ -740,31 +757,37 @@ export component DialogComboBox inherits Rectangle {
             function clamp_to_viewport() {
                 if root.items.length == 0 { return; }
                 let visible_rows = min(8, root.items.length);
-                let top_index = max(0, min(root.items.length - 1, Math.round(-popup_scroll.content-y / 28px)));
+                let top_index = max(0, min(root.items.length - 1, Math.round(-popup_scroll.content-y / Metrics.combo-row-height)));
                 let bottom_index = min(root.items.length - 1, top_index + visible_rows - 1);
                 root.popup_index = max(top_index, min(bottom_index, root.popup_index));
             }
 
             function scroll_by(delta: length) {
                 if root.items.length == 0 { return; }
-                let max_scroll = max(0px, (root.items.length - min(8, root.items.length)) * 28px);
+                let max_scroll = max(0px, (root.items.length - min(8, root.items.length)) * Metrics.combo-row-height);
                 popup_scroll.content-y = max(-max_scroll, min(0px, popup_scroll.content-y - delta));
                 popup_rect.clamp_to_viewport();
+            }
+
+            function scroll_from(delta_y: length) -> bool {
+                if delta_y == 0 { return false; }
+                popup_rect.scroll_by(max(-Metrics.combo-row-height, min(Metrics.combo-row-height, -delta_y)));
+                return true;
             }
 
             function scroll_to_item(index: int) {
                 if root.items.length == 0 { return; }
                 root.popup_index = max(0, min(root.items.length - 1, index));
                 let visible_rows = min(8, root.items.length);
-                let item_top = root.popup_index * 28px;
-                let item_bottom = (root.popup_index + 1) * 28px;
+                let item_top = root.popup_index * Metrics.combo-row-height;
+                let item_bottom = (root.popup_index + 1) * Metrics.combo-row-height;
                 let current_top = -popup_scroll.content-y;
-                let current_bottom = current_top + visible_rows * 28px;
+                let current_bottom = current_top + visible_rows * Metrics.combo-row-height;
 
                 if item_top < current_top {
                     popup_scroll.content-y = -item_top;
                 } else if item_bottom > current_bottom {
-                    popup_scroll.content-y = -(item_bottom - visible_rows * 28px);
+                    popup_scroll.content-y = -(item_bottom - visible_rows * Metrics.combo-row-height);
                 }
             }
 
@@ -777,6 +800,9 @@ export component DialogComboBox inherits Rectangle {
 
                 key-pressed(event) => {
                     root.keyboard_focused = true;
+                    if root.item_action_shortcut(root.popup_index, event.text) {
+                        return accept;
+                    }
                     if event.text == Key.UpArrow {
                         popup_rect.scroll_to_item(root.popup_index - 1);
                         return accept;
@@ -809,35 +835,36 @@ export component DialogComboBox inherits Rectangle {
                     padding: 4px;
                     spacing: 0px;
 
-                    for item[index] in root.items: Rectangle {
-                        height: 28px;
+                    for item[index] in root.items: item_row := Rectangle {
+                        private property <bool> has_action: item.action_icon != "";
+
+                        height: Metrics.combo-row-height;
                         background: item_touch.pressed ? Palette.selection-pressed :
                             (root.popup_index == index ? Palette.control-active :
                             (item_touch.has-hover ? Palette.hover-subtle : transparent));
                         accessible-role: button;
-                        accessible-label: item;
+                        accessible-label: item.text;
 
                         HorizontalLayout {
                             padding-left: 10px;
-                            padding-right: 10px;
+                            padding-right: item_row.has_action ? Metrics.combo-action-gutter : 10px;
 
                             Text {
-                                text: item;
+                                text: item.text;
                                 font-size: 12px;
                                 font-weight: root.current_index == index ? 600 : 400;
                                 color: root.current_index == index ? Palette.accent-text : Palette.text-primary;
                                 vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                overflow: elide;
                             }
                         }
 
                         item_touch := TouchArea {
+                            width: parent.width - (item_row.has_action ? Metrics.combo-action-gutter : 0px);
                             mouse-cursor: pointer;
                             scroll-event(event) => {
-                                if event.delta-y != 0 {
-                                    let step = max(-28px, min(28px, -event.delta-y));
-                                    popup_rect.scroll_by(step);
-                                    return accept;
-                                }
+                                if popup_rect.scroll_from(event.delta-y) { return accept; }
                                 return reject;
                             }
                             changed has-hover => {
@@ -851,6 +878,40 @@ export component DialogComboBox inherits Rectangle {
                                 root.selected(index);
                                 combo_popup.close();
                                 combo_focus.focus();
+                            }
+                        }
+
+                        if item_row.has_action: Rectangle {
+                            x: parent.width - Metrics.combo-action-size - 4px;
+                            y: (parent.height - self.height) / 2;
+                            width: Metrics.combo-action-size;
+                            height: Metrics.combo-action-size;
+                            background: action_touch.pressed ? Palette.control-pressed :
+                                (action_touch.has-hover ? Palette.hover-overlay : transparent);
+                            accessible-role: button;
+                            accessible-label: item.action_label;
+
+                            if item.action_icon == "close": IconClose {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                stroke: action_touch.has-hover ? Palette.text-primary : Palette.text-muted;
+                            }
+
+                            if item.action_icon == "plus": IconPlus {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                stroke: action_touch.has-hover ? Palette.text-primary : Palette.text-muted;
+                            }
+
+                            action_touch := TouchArea {
+                                mouse-cursor: pointer;
+                                scroll-event(event) => {
+                                    if popup_rect.scroll_from(event.delta-y) { return accept; }
+                                    return reject;
+                                }
+                                clicked => {
+                                    root.item_action_clicked(index);
+                                }
                             }
                         }
                     }

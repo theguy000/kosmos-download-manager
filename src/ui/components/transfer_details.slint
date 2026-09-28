@@ -1,4 +1,5 @@
 import { Palette } from "theme.slint";
+import { Navigation } from "navigation.slint";
 export component PausedTransferDetails inherits Rectangle {
     in property <bool> is_resumable: false;
 
@@ -36,7 +37,7 @@ export component StatusFooter inherits Rectangle {
         spacing: 12px;
 
         Text {
-            text: (root.selected_category == 12 ? (root.active_row_visible ? "1 unfinished item" : "0 unfinished items") :
+            text: (root.selected_category == Navigation.unfinished ? (root.active_row_visible ? "1 unfinished item" : "0 unfinished items") :
                 root.total_items + (root.total_items == 1 ? " total item" : " total items")) + " | " +
                 (root.is_downloading ? "1 active download" : "Idle");
             font-size: 11px;

@@ -1,6 +1,7 @@
 import { Palette } from "theme.slint";
 import { ScrollView } from "std-widgets.slint";
-import { CategoryRow, FocusStyle } from "controls.slint";
+import { CategoryRow, FocusStyle, Metrics } from "controls.slint";
+import { Navigation } from "navigation.slint";
 import {
     FileTypeIcon,
     IconCheck,
@@ -11,7 +12,8 @@ import {
     IconUnfinished,
 } from "icons.slint";
 
-struct Subcategory {
+export struct Subcategory {
+    id: int,
     name: string,
     icon: string,
 }
@@ -20,20 +22,7 @@ export component CategorySidebar inherits Rectangle {
     in-out property <int> selected_category;
     in-out property <bool> all_downloads_expanded;
     in-out property <bool> collapsed: false;
-
-    private property <[Subcategory]> subcategories: [
-        { name: "Compressed", icon: "zip" },
-        { name: "Documents", icon: "doc" },
-        { name: "Music", icon: "audio" },
-        { name: "Programs", icon: "exe" },
-        { name: "Video", icon: "video" },
-        { name: "Images", icon: "image" },
-        { name: "Ebooks", icon: "ebook" },
-        { name: "Source Code", icon: "code" },
-        { name: "Disk Images", icon: "iso" },
-        { name: "Torrents", icon: "torrent" },
-        { name: "Databases", icon: "db" },
-    ];
+    in property <[Subcategory]> subcategories: [];
 
     width: root.collapsed ? 28px : 200px;
     background: Palette.background;
@@ -105,14 +94,16 @@ export component CategorySidebar inherits Rectangle {
 
             CategoryRow {
                 text: "All Downloads";
-                selected: root.selected_category == 0;
+                selected: root.selected_category == Navigation.all;
                 expandable: true;
                 expanded: root.all_downloads_expanded;
-                clicked => { root.selected_category = 0; }
+                clicked => { root.selected_category = Navigation.all; }
                 toggle => {
                     root.all_downloads_expanded = !root.all_downloads_expanded;
-                    if !root.all_downloads_expanded && root.selected_category >= 1 && root.selected_category <= 11 {
-                        root.selected_category = 0;
+                    if !root.all_downloads_expanded
+                        && root.selected_category >= Navigation.first-category
+                        && root.selected_category <= Navigation.last-category {
+                        root.selected_category = Navigation.all;
                     }
                 }
                 IconFolder {}
@@ -120,7 +111,7 @@ export component CategorySidebar inherits Rectangle {
 
             if root.all_downloads_expanded: ScrollView {
                 vertical-stretch: 1;
-                max-height: 11 * 26px;
+                max-height: root.subcategories.length * Metrics.category-row-height;
                 horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
 
                 VerticalLayout {
@@ -130,9 +121,9 @@ export component CategorySidebar inherits Rectangle {
                     for subcat[index] in root.subcategories: CategoryRow {
                         text: subcat.name;
                         child: true;
-                        last-child: index == 10;
-                        selected: root.selected_category == index + 1;
-                        clicked => { root.selected_category = index + 1; }
+                        last-child: index == root.subcategories.length - 1;
+                        selected: root.selected_category == subcat.id;
+                        clicked => { root.selected_category = subcat.id; }
                         FileTypeIcon { file-type: subcat.icon; }
                     }
                 }
@@ -145,15 +136,15 @@ export component CategorySidebar inherits Rectangle {
 
             CategoryRow {
                 text: "Unfinished";
-                selected: root.selected_category == 12;
-                clicked => { root.selected_category = 12; }
+                selected: root.selected_category == Navigation.unfinished;
+                clicked => { root.selected_category = Navigation.unfinished; }
                 IconUnfinished {}
             }
 
             CategoryRow {
                 text: "Finished";
-                selected: root.selected_category == 13;
-                clicked => { root.selected_category = 13; }
+                selected: root.selected_category == Navigation.finished;
+                clicked => { root.selected_category = Navigation.finished; }
                 IconCheck {}
             }
 
@@ -165,16 +156,16 @@ export component CategorySidebar inherits Rectangle {
             CategoryRow {
                 text: "Grabber projects";
                 enabled: false;
-                selected: root.selected_category == 14;
-                clicked => { root.selected_category = 14; }
+                selected: root.selected_category == Navigation.grabber;
+                clicked => { root.selected_category = Navigation.grabber; }
                 IconGrabber {}
             }
 
             CategoryRow {
                 text: "Queues";
                 enabled: false;
-                selected: root.selected_category == 15;
-                clicked => { root.selected_category = 15; }
+                selected: root.selected_category == Navigation.queues;
+                clicked => { root.selected_category = Navigation.queues; }
                 IconQueue {}
             }
         }

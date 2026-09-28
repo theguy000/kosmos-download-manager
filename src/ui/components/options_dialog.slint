@@ -1,16 +1,32 @@
 import { Palette } from "theme.slint";
-import { DialogCheckBox, DialogComboBox, DialogInput, FocusStyle, PointerButton } from "controls.slint";
+import {
+    ComboItem,
+    DialogCheckBox,
+    DialogComboBox,
+    DialogInput,
+    FocusStyle,
+    PointerButton,
+} from "controls.slint";
+
+// One folder row: everything the Save To tab shows and edits, kept together so the category
+// name, destination, file types, and enabled state cannot drift apart.
+export struct CategoryOption {
+    id: int,
+    name: string,
+    dir: string,
+    file_types: string,
+    enabled: bool,
+}
 
 export component OptionsDialog inherits Rectangle {
     in-out property <int> selected_tab: 0;
     in-out property <bool> launch_on_startup: false;
     in property <bool> startup_option_visible: false;
-    in property <[string]> category_names: [];
 
-    // Save To tab properties. Index 0 is the default directory.
+    // Save To tab. Index 0 is the default directory.
     in-out property <int> save_to_category: 0;
-    in-out property <[string]> category_dirs: [];
-    in-out property <[string]> category_file_types: [];
+    in-out property <[CategoryOption]> categories: [];
+    in property <[ComboItem]> combo_items: [];
 
     private property <[string]> tab_names: [
         "General",
@@ -28,8 +44,8 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab ? (root.save_to_category == 0 ? 7 : 8) : 3);
 
     private property <string> current_category_name:
-        root.category_names.length > root.save_to_category
-            ? root.category_names[root.save_to_category]
+        root.categories.length > root.save_to_category
+            ? root.categories[root.save_to_category].name
             : "";
 
     private property <int> focus_index: strip_focus.has-focus ? 0
@@ -49,10 +65,12 @@ export component OptionsDialog inherits Rectangle {
     callback browse_category_folder(int);
     callback reset_category_default(int);
     callback default_dir_edited(string, string);
+    callback toggle_category_list(int);
 
     function sync_to_input() {
-        path_input.text = root.category_dirs[root.save_to_category];
-        types_input.text = root.category_file_types[root.save_to_category];
+        if root.categories.length == 0 { return; }
+        path_input.text = root.categories[root.save_to_category].dir;
+        types_input.text = root.categories[root.save_to_category].file_types;
     }
 
     function focus-item(index: int) {
@@ -68,8 +86,7 @@ export component OptionsDialog inherits Rectangle {
         else { cancel_button.take-focus(); }
     }
 
-    changed category_dirs => { root.sync_to_input(); }
-    changed category_file_types => { root.sync_to_input(); }
+    changed categories => { root.sync_to_input(); }
     changed save_to_category => { root.sync_to_input(); }
 
     background: Palette.overlay;
@@ -247,7 +264,25 @@ export component OptionsDialog inherits Rectangle {
                                 width: 200px;
                                 label: "Category";
                                 current_index <=> root.save_to_category;
-                                items: root.category_names;
+                                items: root.combo_items;
+                                item_action_clicked(index) => {
+                                    if index > 0 && index < root.categories.length {
+                                        root.toggle_category_list(root.categories[index].id);
+                                    }
+                                }
+                                item_action_shortcut(index, key) => {
+                                    if index <= 0 || index >= root.categories.length { return false; }
+                                    if root.categories[index].enabled {
+                                        if key == Key.Delete {
+                                            root.toggle_category_list(root.categories[index].id);
+                                            return true;
+                                        }
+                                    } else if key == "+" {
+                                        root.toggle_category_list(root.categories[index].id);
+                                        return true;
+                                    }
+                                    return false;
+                                }
                             }
 
                             Rectangle { horizontal-stretch: 1; }
@@ -268,13 +303,13 @@ export component OptionsDialog inherits Rectangle {
                             height: 36px;
 
                             path_input := DialogInput {
-                                text: root.category_dirs[root.save_to_category];
+                                text: root.categories[root.save_to_category].dir;
                                 label: "Download directory";
                                 edited(text) => {
-                                    // ponytail: the old default is captured before the write so
-                                    // Rust can cascade category subfolders from it.
-                                    let old_default = root.category_dirs[0];
-                                    root.category_dirs[root.save_to_category] = text;
+                                    // The old default is captured before the write so Rust can
+                                    // cascade category subfolders from it.
+                                    let old_default = root.categories[0].dir;
+                                    root.categories[root.save_to_category].dir = text;
                                     if root.save_to_category == 0 {
                                         root.default_dir_edited(old_default, text);
                                     }
@@ -285,7 +320,7 @@ export component OptionsDialog inherits Rectangle {
                                 text: "Browse";
                                 filled: true;
                                 clicked => {
-                                    root.browse_category_folder(root.save_to_category);
+                                    root.browse_category_folder(root.categories[root.save_to_category].id);
                                 }
                             }
 
@@ -293,7 +328,7 @@ export component OptionsDialog inherits Rectangle {
                                 text: "Default";
                                 filled: true;
                                 clicked => {
-                                    root.reset_category_default(root.save_to_category);
+                                    root.reset_category_default(root.categories[root.save_to_category].id);
                                 }
                             }
                         }
@@ -318,11 +353,11 @@ export component OptionsDialog inherits Rectangle {
                                     width: 100%;
                                     height: 100%;
                                     visible: root.save_to_category != 0;
-                                    text: root.category_file_types[root.save_to_category];
+                                    text: root.categories[root.save_to_category].file_types;
                                     label: "File types";
                                     placeholder-text: "e.g. zip, rar, 7z";
                                     edited(text) => {
-                                        root.category_file_types[root.save_to_category] = text;
+                                        root.categories[root.save_to_category].file_types = text;
                                     }
                                 }
 

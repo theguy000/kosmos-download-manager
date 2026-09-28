@@ -1,5 +1,6 @@
 import { Palette } from "theme.slint";
 import { FocusStyle } from "controls.slint";
+import { Navigation } from "navigation.slint";
 import { FileTypeIcon } from "icons.slint";
 import { PausedTransferDetails } from "transfer_details.slint";
 import { ScrollView } from "std-widgets.slint";
@@ -260,12 +261,6 @@ export component DownloadTable inherits ScrollView {
     /// A sortable header was activated.
     callback sort_requested(int);
     callback save_column_widths();
-    pure function category_matches(category: int, item_category: int, completed: bool) -> bool {
-        return category == 0
-            || (category <= 11 && category == item_category)
-            || (category == 12 && !completed)
-            || (category == 13 && completed);
-    }
 
     content-width: max(self.visible-width, root.total_columns_width);
     content-height: self.visible-height;
@@ -423,7 +418,7 @@ export component DownloadTable inherits ScrollView {
             }
 
             for item[idx] in root.sample_downloads: Rectangle {
-                property <bool> is_visible: root.category_matches(
+                property <bool> is_visible: Navigation.category_matches(
                     root.selected_category, item.category_id, true);
                 // The keyboard marks the selected row, or the first listed row when the table
                 // has no selection yet. A click selects the row without painting the ring.
@@ -471,18 +466,18 @@ export component DownloadTable inherits ScrollView {
         }
 
         Rectangle {
-            if root.total_items == 0 || (root.selected_category == 12 && !root.active_row_visible): VerticalLayout {
+            if root.total_items == 0 || (root.selected_category == Navigation.unfinished && !root.active_row_visible): VerticalLayout {
                 padding: 24px;
                 spacing: 6px;
                 alignment: center;
                 Text {
-                    text: root.selected_category == 12 ? "No unfinished downloads" : "No downloads";
+                    text: root.selected_category == Navigation.unfinished ? "No unfinished downloads" : "No downloads";
                     color: Palette.text-secondary;
                     font-size: 13px;
                     horizontal-alignment: center;
                 }
                 Text {
-                    text: root.selected_category == 12 ? "Active, stopped, and failed downloads appear here." :
+                    text: root.selected_category == Navigation.unfinished ? "Active, stopped, and failed downloads appear here." :
                         "Choose Add URL to start a download.";
                     color: Palette.text-muted;
                     font-size: 11px;

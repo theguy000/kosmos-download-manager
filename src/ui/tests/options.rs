@@ -1,11 +1,15 @@
 use super::support::{
-    install_test_platform, option_dir, option_file_types, set_option_dir, set_option_file_types,
+    default_option_categories, install_test_platform, option_dir, option_enabled,
+    option_file_types, set_option_dir, set_option_file_types,
 };
 use crate::settings::{Category, SaveSettings};
-use crate::ui::handlers::options::update_category_defaults;
+use crate::ui::handlers::options::{
+    toggle_category_list, update_category_defaults, update_options_combo_items,
+};
+use crate::ui::handlers::sidebar::update_sidebar_categories;
 use crate::ui::view::MainWindow;
-use slint::ComponentHandle;
 use slint::platform::WindowEvent;
+use slint::{ComponentHandle, Model};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -421,14 +425,10 @@ fn options_category_switch_preserves_other_category_dirs() -> Result<(), Box<dyn
         });
     };
 
-    let names: Vec<slint::SharedString> = Category::ALL
-        .iter()
-        .map(|category| category.display_name().into())
-        .collect();
-    ui.set_options_category_names(Rc::new(slint::VecModel::from(names)).into());
     ui.set_options_selected_tab(2);
     set_option_dir(&ui, 0, "D:\\Downloads");
     set_option_dir(&ui, 1, "D:\\Downloads\\Compressed");
+    update_options_combo_items(&ui);
     ui.set_show_options_dialog(true);
     render();
 
@@ -456,14 +456,10 @@ fn options_file_types_edit_each_category_separately() -> Result<(), Box<dyn std:
     ui.show()?;
     window.set_size(slint::PhysicalSize::new(960, 540));
 
-    let names: Vec<slint::SharedString> = Category::ALL
-        .iter()
-        .map(|category| category.display_name().into())
-        .collect();
-    ui.set_options_category_names(Rc::new(slint::VecModel::from(names)).into());
     ui.set_options_selected_tab(2);
     set_option_file_types(&ui, 1, "zip, rar");
     set_option_file_types(&ui, 5, "mp4");
+    update_options_combo_items(&ui);
     ui.set_show_options_dialog(true);
 
     let key = |text: slint::SharedString| window.dispatch_event(WindowEvent::KeyPressed { text });
@@ -574,11 +570,8 @@ fn options_category_combobox_scroll_and_hover_interaction() -> Result<(), Box<dy
         });
     };
 
-    let names: Vec<slint::SharedString> = Category::ALL
-        .iter()
-        .map(|category| category.display_name().into())
-        .collect();
-    ui.set_options_category_names(std::rc::Rc::new(slint::VecModel::from(names)).into());
+    ui.set_options_categories(slint::ModelRc::from(default_option_categories().as_slice()));
+    update_options_combo_items(&ui);
 
     ui.set_options_selected_tab(2);
     ui.set_options_save_category(0);
@@ -687,6 +680,164 @@ fn options_category_combobox_scroll_and_hover_interaction() -> Result<(), Box<dy
         5,
         "When scrolling moves a new item under the cursor, that item is naturally hovered and selected"
     );
+
+    Ok(())
+}
+
+#[test]
+fn options_category_actions_toggle_and_shortcuts() -> Result<(), Box<dyn std::error::Error>> {
+    use slint::platform::{Key, PointerEventButton, WindowEvent};
+
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+
+    ui.set_options_categories(slint::ModelRc::from(default_option_categories().as_slice()));
+    // Give Compressed a custom list to prove toggling never overwrites it.
+    set_option_file_types(&ui, 1, "zip, rar");
+    update_options_combo_items(&ui);
+
+    let combo_action = |category: usize| {
+        ui.get_options_combo_items()
+            .row_data(category)
+            .map(|item| item.action_icon)
+            .unwrap_or_default()
+    };
+
+    // General (0) has no action, others show the disable action.
+    assert_eq!(combo_action(0), "");
+    assert_eq!(combo_action(1), "close");
+
+    // Disabling keeps the user's file types and only flips the action.
+    toggle_category_list(&ui, Category::Compressed);
+    assert_eq!(option_file_types(&ui, 1), "zip, rar");
+    assert!(!option_enabled(&ui, 1));
+    assert_eq!(combo_action(1), "plus");
+
+    // Re-enabling restores the same custom list.
+    toggle_category_list(&ui, Category::Compressed);
+    assert_eq!(option_file_types(&ui, 1), "zip, rar");
+    assert!(option_enabled(&ui, 1));
+    assert_eq!(combo_action(1), "close");
+
+    // Open options dialog on Save To tab
+    ui.set_options_selected_tab(2);
+    ui.set_options_save_category(0);
+    ui.set_show_options_dialog(true);
+    render();
+
+    // Wire up callbacks as in app.rs
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_toggle_options_category_list(move |cat_id| {
+            let Ok(category) = Category::try_from(cat_id) else {
+                return;
+            };
+            if let Some(ui) = ui_weak.upgrade() {
+                toggle_category_list(&ui, category);
+            }
+        });
+    }
+
+    let click = |x, y| {
+        let position = slint::LogicalPosition::new(x, y);
+        window.dispatch_event(WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        });
+        window.dispatch_event(WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        });
+    };
+    let key = |text: slint::SharedString| window.dispatch_event(WindowEvent::KeyPressed { text });
+
+    // Open Category combobox (x = 414, y = 208)
+    click(414.0, 208.0);
+    render();
+
+    // Keyboard shortcut in popup: Down arrow to Compressed (index 1), press Delete
+    key(Key::DownArrow.into());
+    key(Key::Delete.into());
+    render();
+
+    assert_eq!(
+        option_file_types(&ui, 1),
+        "zip, rar",
+        "Pressing Delete disables the category without rewriting its list"
+    );
+    assert!(
+        !option_enabled(&ui, 1),
+        "Pressing Delete disables the category"
+    );
+    assert_eq!(combo_action(1), "plus", "Action is now enable");
+
+    // Press '+' to add it back
+    key("+".into());
+    render();
+
+    assert!(
+        option_enabled(&ui, 1),
+        "Pressing + on a disabled category enables it"
+    );
+    assert_eq!(
+        option_file_types(&ui, 1),
+        "zip, rar",
+        "Pressing + restores the user's own list"
+    );
+    assert_eq!(combo_action(1), "close", "Action is back to disable");
+    Ok(())
+}
+
+#[test]
+fn test_sidebar_categories_reflect_active_state() -> Result<(), Box<dyn std::error::Error>> {
+    let (_window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+
+    let mut settings = SaveSettings::default();
+    update_sidebar_categories(&ui, &settings);
+
+    // By default, all 11 subcategories are present
+    assert_eq!(ui.get_sidebar_subcategories().row_count(), 11);
+
+    // Select "Programs" (category 4)
+    ui.set_selected_category(4);
+    assert_eq!(ui.get_selected_category(), 4);
+
+    // Deactivate "Programs"
+    settings.set_category_enabled(Category::Programs, false);
+    update_sidebar_categories(&ui, &settings);
+
+    // Sidebar now has 10 subcategories, and Programs is not in it
+    assert_eq!(ui.get_sidebar_subcategories().row_count(), 10);
+    let subcats: Vec<i32> = ui
+        .get_sidebar_subcategories()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    assert!(!subcats.contains(&4));
+    // Selection reset to 0 (All Downloads) because Programs is no longer active
+    assert_eq!(ui.get_selected_category(), 0);
+
+    // Reactivate "Programs"
+    settings.set_category_enabled(Category::Programs, true);
+    update_sidebar_categories(&ui, &settings);
+
+    assert_eq!(ui.get_sidebar_subcategories().row_count(), 11);
+    let subcats: Vec<i32> = ui
+        .get_sidebar_subcategories()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    assert!(subcats.contains(&4));
 
     Ok(())
 }
