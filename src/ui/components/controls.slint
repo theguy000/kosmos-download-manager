@@ -1,5 +1,5 @@
 import { Palette } from "theme.slint";
-import { Slider } from "std-widgets.slint";
+import { ScrollView, Slider } from "std-widgets.slint";
 import { IconChevronDown, IconChevronRight, IconClose } from "icons.slint";
 
 // Single focus-indicator color for the whole app.
@@ -649,7 +649,6 @@ export component DialogComboBox inherits Rectangle {
         root.keyboard_focused = true;
         combo_focus.focus();
     }
-
     private property <int> popup_index: root.current_index;
     private property <bool> keyboard_focused: false;
 
@@ -728,6 +727,8 @@ export component DialogComboBox inherits Rectangle {
         x: 0px;
         y: root.height;
         width: root.width;
+        // ponytail: cap at 8 rows so the popup fits the 420px minimum window; the rest scroll.
+        height: min(8, root.items.length) * 28px + 8px;
         close-policy: close-on-click-outside;
         forward-focus: popup_focus;
 
@@ -735,6 +736,11 @@ export component DialogComboBox inherits Rectangle {
             background: Palette.surface;
             border-width: 1px;
             border-color: Palette.border-popup;
+
+            property <int> scroll-index: root.popup_index;
+            changed scroll-index => {
+                popup_scroll.content-y = -max(0, scroll-index - min(8, root.items.length) + 1) * 28px;
+            }
 
             popup_focus := FocusScope {
                 key-pressed(event) => {
@@ -767,44 +773,49 @@ export component DialogComboBox inherits Rectangle {
                 }
             }
 
-            VerticalLayout {
-                padding: 4px;
-                spacing: 0px;
+            popup_scroll := ScrollView {
+                width: parent.width;
+                height: parent.height;
 
-                for item[index] in root.items: Rectangle {
-                    height: 28px;
-                    background: item_touch.pressed ? Palette.selection-pressed :
-                        (root.popup_index == index ? Palette.control-active :
-                        (item_touch.has-hover ? Palette.hover-subtle : transparent));
-                    accessible-role: button;
-                    accessible-label: item;
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 0px;
 
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
+                    for item[index] in root.items: Rectangle {
+                        height: 28px;
+                        background: item_touch.pressed ? Palette.selection-pressed :
+                            (root.popup_index == index ? Palette.control-active :
+                            (item_touch.has-hover ? Palette.hover-subtle : transparent));
+                        accessible-role: button;
+                        accessible-label: item;
 
-                        Text {
-                            text: item;
-                            font-size: 12px;
-                            font-weight: root.current_index == index ? 600 : 400;
-                            color: root.current_index == index ? Palette.accent-text : Palette.text-primary;
-                            vertical-alignment: center;
-                        }
-                    }
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
 
-                    item_touch := TouchArea {
-                        mouse-cursor: pointer;
-                        changed has-hover => {
-                            if self.has-hover {
-                                root.popup_index = index;
+                            Text {
+                                text: item;
+                                font-size: 12px;
+                                font-weight: root.current_index == index ? 600 : 400;
+                                color: root.current_index == index ? Palette.accent-text : Palette.text-primary;
+                                vertical-alignment: center;
                             }
                         }
-                        clicked => {
-                            root.keyboard_focused = false;
-                            root.current_index = index;
-                            root.selected(index);
-                            combo_popup.close();
-                            combo_focus.focus();
+
+                        item_touch := TouchArea {
+                            mouse-cursor: pointer;
+                            changed has-hover => {
+                                if self.has-hover {
+                                    root.popup_index = index;
+                                }
+                            }
+                            clicked => {
+                                root.keyboard_focused = false;
+                                root.current_index = index;
+                                root.selected(index);
+                                combo_popup.close();
+                                combo_focus.focus();
+                            }
                         }
                     }
                 }
