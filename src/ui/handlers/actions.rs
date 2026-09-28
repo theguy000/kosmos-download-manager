@@ -1,13 +1,13 @@
 use super::delete::clear_active_completed;
-use super::state::AppState;
 use super::table::{remove_row_by_id, update_selection_state};
-use super::view::MainWindow;
 use crate::engine::{DownloadAction, DuplicateChoice};
+use crate::ui::state::AppState;
+use crate::ui::view::MainWindow;
 use slint::ComponentHandle;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
-pub(super) fn send_action(
+pub(crate) fn send_action(
     window: &MainWindow,
     tx: &mpsc::Sender<DownloadAction>,
     action: DownloadAction,
@@ -23,7 +23,7 @@ pub(super) fn send_action(
     message.is_empty()
 }
 
-pub(super) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
+pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
     {
         let window_weak = window.as_weak();
         window.on_browse_folder(move || {

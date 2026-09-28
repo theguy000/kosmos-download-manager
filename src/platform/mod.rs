@@ -1,7 +1,24 @@
 use std::path::{Path, PathBuf};
 
+pub(crate) const DATA_DIRECTORY_NAME: &str = "Kosmos Downloader";
+
+pub(crate) fn data_directory() -> PathBuf {
+    if let Some(directory) = environment_path("LOCALAPPDATA") {
+        return directory.join(DATA_DIRECTORY_NAME);
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(DATA_DIRECTORY_NAME)
+}
+
+fn environment_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 /// Opens `path` with the system handler, ignoring files that were moved or removed.
-pub(super) fn open_file(path: &Path) {
+pub(crate) fn open_file(path: &Path) {
     if !path.exists() {
         return;
     }
@@ -13,7 +30,7 @@ pub(super) fn open_file(path: &Path) {
     }
 }
 
-pub(super) fn default_download_directory() -> PathBuf {
+pub(crate) fn default_download_directory() -> PathBuf {
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         let p = PathBuf::from(userprofile).join("Downloads");
         if p.exists() {
@@ -32,25 +49,25 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Whether Kosmos Downloader is registered to launch at user sign-in.
 #[cfg(windows)]
-pub(super) fn startup_enabled() -> bool {
+pub(crate) fn startup_enabled() -> bool {
     startup_enabled_in(RUN_KEY, VALUE_NAME)
 }
 
 /// Adds or removes the current executable from the user's sign-in launch list.
 #[cfg(windows)]
-pub(super) fn set_startup_enabled(enabled: bool) -> std::io::Result<()> {
+pub(crate) fn set_startup_enabled(enabled: bool) -> std::io::Result<()> {
     let executable = std::env::current_exe()?;
     let value = enabled.then(|| startup_value(&executable));
     set_startup_in(RUN_KEY, VALUE_NAME, value.as_deref())
 }
 
 #[cfg(not(windows))]
-pub(super) const fn startup_enabled() -> bool {
+pub(crate) const fn startup_enabled() -> bool {
     false
 }
 
 #[cfg(not(windows))]
-pub(super) fn set_startup_enabled(_enabled: bool) -> std::io::Result<()> {
+pub(crate) fn set_startup_enabled(_enabled: bool) -> std::io::Result<()> {
     Ok(())
 }
 
@@ -117,6 +134,11 @@ mod tests {
             startup_value(Path::new(r"C:\Program Files\Kosmos\app.exe")),
             r#""C:\Program Files\Kosmos\app.exe""#
         );
+    }
+
+    #[test]
+    fn environment_path_returns_none_for_unset_variables() {
+        assert_eq!(environment_path("KOSMOS_HISTORY_TEST_UNSET"), None);
     }
 
     #[test]

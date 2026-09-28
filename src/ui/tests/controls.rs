@@ -1,10 +1,10 @@
 use super::support::{finished_entry, install_test_platform};
 use crate::history::HistoryStore;
-use crate::ui::actions::send_action;
-use crate::ui::delete::complete_history_delete;
-use crate::ui::platform::default_download_directory;
+use crate::platform::default_download_directory;
+use crate::settings::SaveSettings;
+use crate::ui::handlers::actions::send_action;
+use crate::ui::handlers::delete::complete_history_delete;
 use crate::ui::projection::{history_table_item, update_window_state};
-use crate::ui::save_settings::SaveSettings;
 use crate::ui::view::{MainWindow, TableItem};
 use slint::ComponentHandle;
 use std::cell::RefCell;
@@ -837,7 +837,8 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
     // History selection and deletion updates store and window
     {
         use crate::history::tests::TempFile;
-        use crate::ui::table::{HistoryTracker, step_selection, update_selection_state};
+        use crate::ui::handlers::table::{step_selection, update_selection_state};
+        use crate::ui::projection::HistoryTracker;
         use std::cell::RefCell;
 
         let file = TempFile::new("delete-history-test");
@@ -1047,7 +1048,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
 
     // A header click reorders the listed rows and mirrors the sort state back to the window.
     {
-        use crate::ui::table::apply_sort_request;
+        use crate::ui::handlers::table::apply_sort_request;
         use crate::ui::view::TableItem;
         use slint::Model;
 

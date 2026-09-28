@@ -1,25 +1,21 @@
-use super::platform::{default_download_directory, set_startup_enabled, startup_enabled};
-use super::projection::history_table_item;
-use super::save_settings::{Category, SaveSettings};
-use super::state::AppState;
 use super::table::{resort, update_selection_state};
-use super::view::MainWindow;
+use crate::platform::{default_download_directory, set_startup_enabled, startup_enabled};
+use crate::settings::{Category, SaveSettings};
+use crate::ui::projection::history_table_item;
+use crate::ui::state::AppState;
+use crate::ui::view::MainWindow;
 use slint::ComponentHandle;
 use slint::Model;
 use std::path::{Path, PathBuf};
 
-pub(super) fn window_category_dir(window: &MainWindow, category: Category) -> slint::SharedString {
+fn window_category_dir(window: &MainWindow, category: Category) -> slint::SharedString {
     window
         .get_options_category_dirs()
         .row_data(category.category_id() as usize)
         .unwrap_or_default()
 }
 
-pub(super) fn set_window_category_dir(
-    window: &MainWindow,
-    category: Category,
-    value: slint::SharedString,
-) {
+fn set_window_category_dir(window: &MainWindow, category: Category, value: slint::SharedString) {
     let mut dirs: Vec<slint::SharedString> = window.get_options_category_dirs().iter().collect();
     if let Some(dir) = dirs.get_mut(category.category_id() as usize) {
         *dir = value;
@@ -27,17 +23,14 @@ pub(super) fn set_window_category_dir(
     window.set_options_category_dirs(slint::ModelRc::from(dirs.as_slice()));
 }
 
-pub(super) fn window_category_file_types(
-    window: &MainWindow,
-    category: Category,
-) -> slint::SharedString {
+fn window_category_file_types(window: &MainWindow, category: Category) -> slint::SharedString {
     window
         .get_options_category_file_types()
         .row_data(category.category_id() as usize)
         .unwrap_or_default()
 }
 
-pub(super) fn set_window_category_file_types(
+fn set_window_category_file_types(
     window: &MainWindow,
     category: Category,
     value: slint::SharedString,
@@ -50,7 +43,7 @@ pub(super) fn set_window_category_file_types(
     window.set_options_category_file_types(slint::ModelRc::from(types.as_slice()));
 }
 
-pub(super) fn update_category_defaults(
+pub(crate) fn update_category_defaults(
     window: &MainWindow,
     old_default: &Path,
     new_default: &Path,
@@ -74,7 +67,7 @@ pub(super) fn update_category_defaults(
     }
 }
 
-pub(super) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
+pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
     {
         let window_weak = window.as_weak();
         let save_settings = state.save_settings.clone();

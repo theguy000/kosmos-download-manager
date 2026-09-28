@@ -1,8 +1,8 @@
 use super::format::{format_bytes, format_eta, format_speed};
-use super::save_settings::SaveSettings;
 use super::view::{MainWindow, Palette};
 use crate::engine::{DownloadSnapshot, DownloadStatus};
-use crate::history::{HistoryEntry, downloaded_label};
+use crate::history::{HistoryEntry, downloaded_label, now_unix_ms};
+use crate::settings::SaveSettings;
 use slint::ComponentHandle;
 use tokio::sync::watch;
 
@@ -152,5 +152,70 @@ pub(super) fn update_window_state(
         window.set_duplicate_existing_size(size_str.into());
     } else if window.get_show_duplicate_dialog() {
         window.set_show_duplicate_dialog(false);
+    }
+}
+
+/// Follows the active session and reports the download it finishes.
+pub(crate) struct HistoryTracker {
+    /// Id for the next listed download. Never 0, which marks the active download.
+    next_item_id: i32,
+    session_id: u64,
+    completed: Option<HistoryEntry>,
+}
+
+impl HistoryTracker {
+    pub(crate) fn new(loaded_next_id: i32) -> Self {
+        Self {
+            next_item_id: loaded_next_id,
+            session_id: 0,
+            completed: None,
+        }
+    }
+
+    pub(crate) fn completed(&self) -> Option<&HistoryEntry> {
+        self.completed.as_ref()
+    }
+
+    /// Records `snap` and returns the finished download.
+    ///
+    /// The first snapshot a session reports `Completed` yields its entry, so it can be persisted
+    /// and listed right away. A later session clears the kept entry without re-listing it.
+    pub(crate) fn observe(&mut self, snap: &DownloadSnapshot) -> Option<HistoryEntry> {
+        if snap.session_id != self.session_id {
+            self.session_id = snap.session_id;
+            self.completed = None;
+        }
+
+        match snap.status {
+            // The first snapshot to report the finish is the one kept, so the listed row keeps
+            // the id and the completion time of that first report.
+            DownloadStatus::Completed if self.completed.is_none() => {
+                let entry = finished_download(self.next_item_id, snap);
+                self.next_item_id = self.next_item_id.saturating_add(1);
+                self.completed = Some(entry.clone());
+                Some(entry)
+            }
+            DownloadStatus::Idle => {
+                self.completed = None;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Drops the pending download, matching a duplicate answer that replaces the file.
+    pub(crate) fn clear_completed(&mut self) -> Option<HistoryEntry> {
+        self.completed.take()
+    }
+}
+
+fn finished_download(id: i32, snap: &DownloadSnapshot) -> HistoryEntry {
+    HistoryEntry {
+        id,
+        url: snap.url.clone(),
+        filename: snap.filename.clone(),
+        save_path: snap.save_path.clone(),
+        total_bytes: snap.total_bytes.unwrap_or(snap.downloaded_bytes),
+        completed_unix_ms: now_unix_ms(),
     }
 }

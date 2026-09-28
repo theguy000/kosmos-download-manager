@@ -1,9 +1,9 @@
-use super::delete::{DeleteTarget, PendingDelete};
-use super::save_settings::SaveSettings;
-use super::table::HistoryTracker;
+use super::handlers::delete::{DeleteTarget, PendingDelete};
+use super::projection::HistoryTracker;
 use super::view::TableItem;
 use crate::engine::{DownloadAction, DownloadSnapshot};
 use crate::history::HistoryStore;
+use crate::settings::SaveSettings;
 use std::cell::RefCell;
 use std::rc::Rc;
 use tokio::sync::{mpsc, watch};

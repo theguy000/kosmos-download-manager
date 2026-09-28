@@ -1,5 +1,5 @@
 use crate::engine::{DownloadAction, DownloadStatus};
-use crate::ui::delete::{DeleteTarget, history_delete_failure};
+use crate::ui::handlers::delete::{DeleteTarget, history_delete_failure};
 use std::io::{Error, ErrorKind};
 
 #[test]

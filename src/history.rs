@@ -6,13 +6,11 @@
 //! must not roam.
 
 use serde::{Deserialize, Serialize};
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 const HISTORY_FORMAT_HEADER: &str = "kosmos-history-v1";
 const HISTORY_FILE_NAME: &str = "history.jsonl";
-const HISTORY_DIRECTORY_NAME: &str = "Kosmos Downloader";
 const MAX_HISTORY_ENTRIES: usize = 1_000;
 
 #[derive(Debug, Error)]
@@ -103,12 +101,6 @@ impl HistoryStore {
     }
 
     fn rewrite(&mut self) -> Result<(), HistoryError> {
-        if let Some(parent) = self.path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent)?;
-        }
-
         let mut contents = String::with_capacity(32 + self.entries.len() * 192);
         contents.push_str(HISTORY_FORMAT_HEADER);
         contents.push('\n');
@@ -117,15 +109,7 @@ impl HistoryStore {
             contents.push('\n');
         }
 
-        // Replace through a temporary file so a failed write cannot truncate the log.
-        let temporary = temporary_path(&self.path);
-        std::fs::write(&temporary, contents.as_bytes())?;
-        if let Err(error) = std::fs::rename(&temporary, &self.path) {
-            // Best-effort cleanup; the rename error is the one worth reporting.
-            let _ = std::fs::remove_file(&temporary);
-            return Err(HistoryError::Io(error));
-        }
-
+        crate::fs::write_atomic(&self.path, contents.as_bytes())?;
         Ok(())
     }
 }
@@ -161,29 +145,8 @@ fn decode_entry(line: &str) -> Option<HistoryEntry> {
     (entry.id > 0 && !entry.filename.is_empty()).then_some(entry)
 }
 
-fn temporary_path(path: &Path) -> PathBuf {
-    let mut name: OsString = path.as_os_str().to_os_string();
-    name.push(".tmp");
-    PathBuf::from(name)
-}
-
 fn default_history_path() -> PathBuf {
-    data_directory().join(HISTORY_FILE_NAME)
-}
-
-pub(crate) fn data_directory() -> PathBuf {
-    if let Some(directory) = environment_path("LOCALAPPDATA") {
-        return directory.join(HISTORY_DIRECTORY_NAME);
-    }
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(HISTORY_DIRECTORY_NAME)
-}
-
-fn environment_path(name: &str) -> Option<PathBuf> {
-    std::env::var_os(name)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
+    crate::platform::data_directory().join(HISTORY_FILE_NAME)
 }
 
 /// Milliseconds since the Unix epoch, or 0 when the system clock is before it.

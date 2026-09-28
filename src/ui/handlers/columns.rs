@@ -1,9 +1,9 @@
-use super::table_settings::TableColumnWidths;
-use super::view::MainWindow;
+use crate::settings::TableColumnWidths;
+use crate::ui::view::MainWindow;
 use slint::ComponentHandle;
 use tokio::sync::watch;
 
-pub(super) fn init_columns(
+pub(crate) fn init_columns(
     window: &MainWindow,
 ) -> (
     watch::Sender<Option<TableColumnWidths>>,
@@ -21,7 +21,7 @@ pub(super) fn init_columns(
     watch::channel(None::<TableColumnWidths>)
 }
 
-pub(super) fn start_column_widths_worker(
+pub(crate) fn start_column_widths_worker(
     mut column_widths_rx: watch::Receiver<Option<TableColumnWidths>>,
 ) {
     // One writer, so overlapping saves can never race on the same temp file. A watch channel
@@ -41,7 +41,7 @@ pub(super) fn start_column_widths_worker(
     });
 }
 
-pub(super) fn bind_column_handlers(
+pub(crate) fn bind_column_handlers(
     window: &MainWindow,
     column_widths_tx: watch::Sender<Option<TableColumnWidths>>,
 ) {

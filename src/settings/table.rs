@@ -45,25 +45,13 @@ impl TableColumnWidths {
     }
 
     pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        let mut temp = path.as_os_str().to_os_string();
-        temp.push(".tmp");
-        let temp_path = PathBuf::from(temp);
-        std::fs::write(&temp_path, json.as_bytes())?;
-        if let Err(error) = std::fs::rename(&temp_path, path) {
-            // Best-effort cleanup; the rename error is the one worth reporting.
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(error);
-        }
-        Ok(())
+        crate::fs::write_atomic(path, json.as_bytes())
     }
 }
 
 fn settings_path() -> PathBuf {
-    crate::history::data_directory().join(SETTINGS_FILE_NAME)
+    crate::platform::data_directory().join(SETTINGS_FILE_NAME)
 }
 
 #[cfg(test)]

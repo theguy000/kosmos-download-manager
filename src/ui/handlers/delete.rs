@@ -1,22 +1,23 @@
 use super::actions::send_action;
-use super::state::AppState;
-use super::table::{HistoryTracker, remove_row_by_id};
-use super::view::{MainWindow, TableItem};
+use super::table::remove_row_by_id;
 use crate::engine::{DownloadAction, DownloadSnapshot, DownloadStatus};
 use crate::history::{HistoryEntry, HistoryStore};
+use crate::ui::projection::HistoryTracker;
+use crate::ui::state::AppState;
+use crate::ui::view::{MainWindow, TableItem};
 use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct DeleteTarget {
-    pub(super) session_id: u64,
-    pub(super) status: DownloadStatus,
-    pub(super) completed_only: bool,
+pub(crate) struct DeleteTarget {
+    pub(crate) session_id: u64,
+    pub(crate) status: DownloadStatus,
+    pub(crate) completed_only: bool,
 }
 
 impl DeleteTarget {
-    pub(super) fn displayed(snapshot: &DownloadSnapshot) -> Option<Self> {
+    pub(crate) fn displayed(snapshot: &DownloadSnapshot) -> Option<Self> {
         (!matches!(snapshot.status, DownloadStatus::Idle)).then(|| Self {
             session_id: snapshot.session_id,
             status: snapshot.status.clone(),
@@ -24,7 +25,7 @@ impl DeleteTarget {
         })
     }
 
-    pub(super) fn action(&self, delete_file: bool) -> DownloadAction {
+    pub(crate) fn action(&self, delete_file: bool) -> DownloadAction {
         DownloadAction::Remove {
             expected_session_id: self.session_id,
             expected_status: self.status.clone(),
@@ -35,7 +36,7 @@ impl DeleteTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum PendingDelete {
+pub(crate) enum PendingDelete {
     Active(DeleteTarget),
     History {
         id: i32,
@@ -44,7 +45,7 @@ pub(super) enum PendingDelete {
     },
 }
 
-pub(super) fn open_active_delete_confirmation(
+fn open_active_delete_confirmation(
     window: &MainWindow,
     displayed: &RefCell<Option<DeleteTarget>>,
     pending: &RefCell<Option<PendingDelete>>,
@@ -67,7 +68,7 @@ pub(super) fn open_active_delete_confirmation(
     window.set_show_delete_dialog(true);
 }
 
-pub(super) fn open_history_delete_confirmation(
+fn open_history_delete_confirmation(
     window: &MainWindow,
     pending: &RefCell<Option<PendingDelete>>,
     entry: &HistoryEntry,
@@ -84,7 +85,7 @@ pub(super) fn open_history_delete_confirmation(
     window.set_show_delete_dialog(true);
 }
 
-pub(super) fn clear_active_completed(
+pub(crate) fn clear_active_completed(
     window: &MainWindow,
     tracker: &RefCell<HistoryTracker>,
 ) -> Option<HistoryEntry> {
@@ -96,7 +97,7 @@ pub(super) fn clear_active_completed(
 }
 
 /// Removes a listed download from the log, the table, and the selection.
-pub(super) fn complete_history_delete(
+pub(crate) fn complete_history_delete(
     window: &MainWindow,
     tracker: &RefCell<HistoryTracker>,
     store: &mut HistoryStore,
@@ -130,11 +131,7 @@ pub(super) fn complete_history_delete(
 }
 
 /// Deletes the file of a listed download off the UI thread, then reports back on the event loop.
-pub(super) fn spawn_history_file_delete(
-    window: slint::Weak<MainWindow>,
-    id: i32,
-    save_path: PathBuf,
-) {
+fn spawn_history_file_delete(window: slint::Weak<MainWindow>, id: i32, save_path: PathBuf) {
     let display_path = save_path.display().to_string();
     tokio::spawn(async move {
         let failure =
@@ -155,7 +152,7 @@ pub(super) fn spawn_history_file_delete(
 }
 
 /// A file that is already gone counts as deleted; anything else is reported.
-pub(super) fn history_delete_failure(removal: std::io::Result<()>) -> Option<std::io::Error> {
+pub(crate) fn history_delete_failure(removal: std::io::Result<()>) -> Option<std::io::Error> {
     match removal {
         Ok(()) => None,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
@@ -163,7 +160,7 @@ pub(super) fn history_delete_failure(removal: std::io::Result<()>) -> Option<std
     }
 }
 
-pub(super) fn bind_delete_handlers(window: &MainWindow, state: &AppState) {
+pub(crate) fn bind_delete_handlers(window: &MainWindow, state: &AppState) {
     {
         let displayed = state.displayed_delete_target.clone();
         let pending = state.pending_delete.clone();

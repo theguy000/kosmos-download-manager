@@ -1,4 +1,79 @@
-use super::save_settings::Category;
+use super::SaveSettings;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(i32)]
+pub enum Category {
+    General = 0,
+    Compressed = 1,
+    Documents = 2,
+    Music = 3,
+    Programs = 4,
+    Video = 5,
+    Images = 6,
+    Ebooks = 7,
+    SourceCode = 8,
+    DiskImages = 9,
+    Torrents = 10,
+    Databases = 11,
+}
+
+impl Category {
+    pub const ALL: [Self; 12] = [
+        Self::General,
+        Self::Compressed,
+        Self::Documents,
+        Self::Music,
+        Self::Programs,
+        Self::Video,
+        Self::Images,
+        Self::Ebooks,
+        Self::SourceCode,
+        Self::DiskImages,
+        Self::Torrents,
+        Self::Databases,
+    ];
+
+    #[must_use]
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::General => "General",
+            other => SaveSettings::category_subfolder_name(other),
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::General | Self::Documents => "doc",
+            Self::Compressed => "zip",
+            Self::Music => "audio",
+            Self::Programs => "exe",
+            Self::Video => "video",
+            Self::Images => "image",
+            Self::Ebooks => "ebook",
+            Self::SourceCode => "code",
+            Self::DiskImages => "iso",
+            Self::Torrents => "torrent",
+            Self::Databases => "db",
+        }
+    }
+
+    #[must_use]
+    pub const fn category_id(self) -> i32 {
+        self as i32
+    }
+}
+
+impl From<i32> for Category {
+    fn from(index: i32) -> Self {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| Self::ALL.get(index))
+            .copied()
+            .unwrap_or(Self::General)
+    }
+}
 
 impl Category {
     #[must_use]

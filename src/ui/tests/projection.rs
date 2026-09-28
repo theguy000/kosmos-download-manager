@@ -1,7 +1,7 @@
 use super::support::install_test_platform;
-use crate::ui::actions::send_action;
+use crate::settings::SaveSettings;
+use crate::ui::handlers::actions::send_action;
 use crate::ui::projection::{should_project_snapshot, update_window_state};
-use crate::ui::save_settings::SaveSettings;
 use crate::ui::view::MainWindow;
 
 #[test]

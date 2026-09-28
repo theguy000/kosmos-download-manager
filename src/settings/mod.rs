@@ -1,85 +1,17 @@
 //! Persisted settings for download destination directories and categories.
 
-use super::platform::default_download_directory;
+mod category;
+mod table;
+
+pub use category::Category;
+pub(crate) use table::TableColumnWidths;
+
+use crate::platform::default_download_directory;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const SETTINGS_FILE_NAME: &str = "save_settings.json";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[repr(i32)]
-pub enum Category {
-    General = 0,
-    Compressed = 1,
-    Documents = 2,
-    Music = 3,
-    Programs = 4,
-    Video = 5,
-    Images = 6,
-    Ebooks = 7,
-    SourceCode = 8,
-    DiskImages = 9,
-    Torrents = 10,
-    Databases = 11,
-}
-
-impl Category {
-    pub const ALL: [Self; 12] = [
-        Self::General,
-        Self::Compressed,
-        Self::Documents,
-        Self::Music,
-        Self::Programs,
-        Self::Video,
-        Self::Images,
-        Self::Ebooks,
-        Self::SourceCode,
-        Self::DiskImages,
-        Self::Torrents,
-        Self::Databases,
-    ];
-
-    #[must_use]
-    pub const fn display_name(self) -> &'static str {
-        match self {
-            Self::General => "General",
-            other => SaveSettings::category_subfolder_name(other),
-        }
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::General | Self::Documents => "doc",
-            Self::Compressed => "zip",
-            Self::Music => "audio",
-            Self::Programs => "exe",
-            Self::Video => "video",
-            Self::Images => "image",
-            Self::Ebooks => "ebook",
-            Self::SourceCode => "code",
-            Self::DiskImages => "iso",
-            Self::Torrents => "torrent",
-            Self::Databases => "db",
-        }
-    }
-
-    #[must_use]
-    pub const fn category_id(self) -> i32 {
-        self as i32
-    }
-}
-
-impl From<i32> for Category {
-    fn from(index: i32) -> Self {
-        usize::try_from(index)
-            .ok()
-            .and_then(|index| Self::ALL.get(index))
-            .copied()
-            .unwrap_or(Self::General)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
@@ -282,17 +214,8 @@ impl SaveSettings {
     }
 
     pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        let temp_path = path.with_extension(format!("tmp.{}", std::process::id()));
-        std::fs::write(&temp_path, json.as_bytes())?;
-        if let Err(error) = std::fs::rename(&temp_path, path) {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(error);
-        }
-        Ok(())
+        crate::fs::write_atomic(path, json.as_bytes())
     }
 }
 
@@ -304,7 +227,7 @@ fn extension_of(filename: &str) -> &str {
 }
 
 fn settings_path() -> PathBuf {
-    crate::history::data_directory().join(SETTINGS_FILE_NAME)
+    crate::platform::data_directory().join(SETTINGS_FILE_NAME)
 }
 
 #[cfg(test)]

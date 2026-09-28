@@ -45,7 +45,7 @@ impl TempFile {
 impl Drop for TempFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
-        let _ = std::fs::remove_file(temporary_path(&self.path));
+        let _ = std::fs::remove_file(crate::fs::temporary_path(&self.path));
     }
 }
 
@@ -330,10 +330,10 @@ fn default_history_path_is_under_local_app_data() {
         path.parent()
             .and_then(|parent| parent.file_name())
             .and_then(|name| name.to_str()),
-        Some(HISTORY_DIRECTORY_NAME)
+        Some(crate::platform::DATA_DIRECTORY_NAME)
     );
 
-    if let Some(local) = environment_path("LOCALAPPDATA") {
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
         assert!(
             path.starts_with(&local),
             "{} is not under {}",
@@ -341,20 +341,6 @@ fn default_history_path_is_under_local_app_data() {
             local.display()
         );
     }
-}
-
-#[test]
-fn environment_and_temporary_paths_are_derived_from_the_log_path() {
-    let file = TempFile::new("paths");
-    let temporary = temporary_path(file.path());
-    assert_eq!(
-        temporary,
-        PathBuf::from(format!("{}.tmp", file.path().display())),
-        "the log is replaced through a sibling temporary file"
-    );
-    assert_ne!(temporary, file.path());
-
-    assert_eq!(environment_path("KOSMOS_HISTORY_TEST_UNSET"), None);
 }
 
 #[test]

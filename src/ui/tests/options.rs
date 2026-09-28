@@ -1,8 +1,8 @@
 use super::support::{
     install_test_platform, option_dir, option_file_types, set_option_dir, set_option_file_types,
 };
-use crate::ui::options::update_category_defaults;
-use crate::ui::save_settings::{Category, SaveSettings};
+use crate::settings::{Category, SaveSettings};
+use crate::ui::handlers::options::update_category_defaults;
 use crate::ui::view::MainWindow;
 use slint::ComponentHandle;
 use slint::platform::WindowEvent;
