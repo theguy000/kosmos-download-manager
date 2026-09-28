@@ -732,29 +732,57 @@ export component DialogComboBox inherits Rectangle {
         close-policy: close-on-click-outside;
         forward-focus: popup_focus;
 
-        Rectangle {
+        popup_rect := Rectangle {
             background: Palette.surface;
             border-width: 1px;
             border-color: Palette.border-popup;
 
-            property <int> scroll-index: root.popup_index;
-            changed scroll-index => {
-                popup_scroll.content-y = -max(0, scroll-index - min(8, root.items.length) + 1) * 28px;
+            function clamp_to_viewport() {
+                if root.items.length == 0 { return; }
+                let visible_rows = min(8, root.items.length);
+                let top_index = max(0, min(root.items.length - 1, Math.round(-popup_scroll.content-y / 28px)));
+                let bottom_index = min(root.items.length - 1, top_index + visible_rows - 1);
+                root.popup_index = max(top_index, min(bottom_index, root.popup_index));
+            }
+
+            function scroll_by(delta: length) {
+                if root.items.length == 0 { return; }
+                let max_scroll = max(0px, (root.items.length - min(8, root.items.length)) * 28px);
+                popup_scroll.content-y = max(-max_scroll, min(0px, popup_scroll.content-y - delta));
+                popup_rect.clamp_to_viewport();
+            }
+
+            function scroll_to_item(index: int) {
+                if root.items.length == 0 { return; }
+                root.popup_index = max(0, min(root.items.length - 1, index));
+                let visible_rows = min(8, root.items.length);
+                let item_top = root.popup_index * 28px;
+                let item_bottom = (root.popup_index + 1) * 28px;
+                let current_top = -popup_scroll.content-y;
+                let current_bottom = current_top + visible_rows * 28px;
+
+                if item_top < current_top {
+                    popup_scroll.content-y = -item_top;
+                } else if item_bottom > current_bottom {
+                    popup_scroll.content-y = -(item_bottom - visible_rows * 28px);
+                }
             }
 
             popup_focus := FocusScope {
+                focus-changed-event => {
+                    if self.has-focus {
+                        popup_rect.scroll_to_item(root.popup_index);
+                    }
+                }
+
                 key-pressed(event) => {
                     root.keyboard_focused = true;
                     if event.text == Key.UpArrow {
-                        if root.popup_index > 0 {
-                            root.popup_index = root.popup_index - 1;
-                        }
+                        popup_rect.scroll_to_item(root.popup_index - 1);
                         return accept;
                     }
                     if event.text == Key.DownArrow {
-                        if root.popup_index < root.items.length - 1 {
-                            root.popup_index = root.popup_index + 1;
-                        }
+                        popup_rect.scroll_to_item(root.popup_index + 1);
                         return accept;
                     }
                     if event.text == Key.Space || event.text == Key.Return {
@@ -804,6 +832,14 @@ export component DialogComboBox inherits Rectangle {
 
                         item_touch := TouchArea {
                             mouse-cursor: pointer;
+                            scroll-event(event) => {
+                                if event.delta-y != 0 {
+                                    let step = max(-28px, min(28px, -event.delta-y));
+                                    popup_rect.scroll_by(step);
+                                    return accept;
+                                }
+                                return reject;
+                            }
                             changed has-hover => {
                                 if self.has-hover {
                                     root.popup_index = index;

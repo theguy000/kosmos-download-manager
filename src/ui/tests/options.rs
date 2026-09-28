@@ -556,3 +556,137 @@ fn options_file_types_refresh_when_props_reset_after_open() -> Result<(), Box<dy
 
     Ok(())
 }
+
+#[test]
+fn options_category_combobox_scroll_and_hover_interaction() -> Result<(), Box<dyn std::error::Error>>
+{
+    use slint::platform::{Key, PointerEventButton, WindowEvent};
+
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+
+    let names: Vec<slint::SharedString> = Category::ALL
+        .iter()
+        .map(|category| category.display_name().into())
+        .collect();
+    ui.set_options_category_names(std::rc::Rc::new(slint::VecModel::from(names)).into());
+
+    ui.set_options_selected_tab(2);
+    ui.set_options_save_category(0);
+    ui.set_show_options_dialog(true);
+    render();
+
+    let click = |x, y| {
+        let position = slint::LogicalPosition::new(x, y);
+        window.dispatch_event(WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        });
+        window.dispatch_event(WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        });
+    };
+    let move_pointer = |x, y| {
+        window.dispatch_event(WindowEvent::PointerMoved {
+            position: slint::LogicalPosition::new(x, y),
+        });
+    };
+    let scroll = |x, y, delta_y| {
+        window.dispatch_event(WindowEvent::PointerScrolled {
+            position: slint::LogicalPosition::new(x, y),
+            delta_x: 0.0,
+            delta_y,
+        });
+    };
+    let key = |text: slint::SharedString| window.dispatch_event(WindowEvent::KeyPressed { text });
+
+    // Open Category combobox
+    click(414.0, 208.0);
+    render();
+
+    // Hover over Video (index 5, center y = 370.0)
+    move_pointer(414.0, 370.0);
+    render();
+
+    // Scroll down 4 times (delta_y = -28.0). The list moves up under the cursor;
+    // DiskImages (index 9) moves into y = 370.0 directly under the pointer.
+    for _ in 0..4 {
+        scroll(414.0, 370.0, -28.0);
+        render();
+    }
+
+    key(Key::Return.into());
+    render();
+
+    assert_eq!(
+        ui.get_options_save_category(),
+        9,
+        "The item that scrolls into position under the mouse pointer becomes hovered and selectable"
+    );
+
+    // Reopen combobox
+    click(414.0, 208.0);
+    render();
+
+    // Scroll down to the bottom so visible items are 4..11
+    for _ in 0..4 {
+        scroll(414.0, 370.0, -28.0);
+        render();
+    }
+
+    // Now hover over Databases (index 11, bottom row in the visible viewport at y = 426.0)
+    move_pointer(414.0, 426.0);
+    render();
+
+    // Click at the hovered position to select Databases
+    click(414.0, 426.0);
+    render();
+
+    assert_eq!(
+        ui.get_options_save_category(),
+        11,
+        "Hovering and clicking after scroll selects the item where the mouse is"
+    );
+
+    // Reopen combobox - it opens scrolled to index 11
+    click(414.0, 208.0);
+    render();
+
+    // Scroll back up to the top
+    for _ in 0..4 {
+        scroll(414.0, 370.0, 28.0);
+        render();
+    }
+
+    // Now at top (content-y = 0), hover over Compressed (index 1, center y = 258.0)
+    move_pointer(414.0, 258.0);
+    render();
+
+    // Scroll down 4 times. Compressed (index 1) rolls off the top, and Video (index 5)
+    // moves into y = 258.0 under the mouse. Video must be hovered and selected.
+    for _ in 0..4 {
+        scroll(414.0, 258.0, -28.0);
+        render();
+    }
+
+    key(Key::Return.into());
+    render();
+
+    assert_eq!(
+        ui.get_options_save_category(),
+        5,
+        "When scrolling moves a new item under the cursor, that item is naturally hovered and selected"
+    );
+
+    Ok(())
+}
