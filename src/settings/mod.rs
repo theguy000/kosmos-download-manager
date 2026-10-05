@@ -377,8 +377,8 @@ mod tests {
         for (index, category) in Category::ALL.iter().enumerate() {
             assert_eq!(Category::try_from(index as i32), Ok(*category));
             assert_eq!(category.category_id(), index as i32);
-            assert!(!category.as_str().is_empty());
-            assert!(!category.display_name().is_empty());
+            assert_ne!(category.as_str(), "");
+            assert_ne!(category.display_name(), "");
         }
         assert_eq!(Category::try_from(99), Err(99));
         assert_eq!(Category::try_from(-1), Err(-1));
@@ -437,7 +437,10 @@ mod tests {
             SaveSettings::normalize_extensions(" .ZIP, rar;7z  7z "),
             vec!["zip", "rar", "7z"]
         );
-        assert!(SaveSettings::normalize_extensions(" , ; ").is_empty());
+        assert_eq!(
+            SaveSettings::normalize_extensions(" , ; "),
+            Vec::<String>::new()
+        );
     }
 
     #[test]

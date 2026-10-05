@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn test_chunk_splitting_empty() {
         let chunks = calculate_chunks(0, 4);
-        assert!(chunks.is_empty());
+        assert_eq!(chunks, []);
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod tests {
         for total_size in [1, 2, 7, 15, 64, 100, 1024, 1_000_007] {
             for num_chunks in [1, 2, 3, 4, 5, 8, 16, 32] {
                 let chunks = calculate_chunks(total_size, num_chunks);
-                assert!(!chunks.is_empty());
+                assert_ne!(chunks, []);
                 assert_eq!(chunks[0].start, 0);
                 assert_eq!(chunks.last().unwrap().end, total_size - 1);
 

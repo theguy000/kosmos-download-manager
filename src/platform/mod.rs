@@ -67,6 +67,8 @@ pub(crate) const fn startup_enabled() -> bool {
 }
 
 #[cfg(not(windows))]
+// Result keeps the signature identical to the Windows impl so shared callers stay cfg-free.
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn set_startup_enabled(_enabled: bool) -> std::io::Result<()> {
     Ok(())
 }

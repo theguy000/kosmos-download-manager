@@ -189,7 +189,7 @@ fn non_utf8_file_starts_empty() {
     std::fs::write(file.path(), b"kosmos-history-v1\n\xff\xfe\n").unwrap();
 
     let store = file.store();
-    assert!(store.entries().is_empty());
+    assert_eq!(store.entries(), []);
     assert_eq!(store.next_id(), 1);
 }
 
@@ -271,7 +271,7 @@ fn rejected_records_are_ignored() {
     file.write(&format!("{HISTORY_FORMAT_HEADER}\n{}\n", bad.join("\n")));
 
     let store = file.store();
-    assert!(store.entries().is_empty());
+    assert_eq!(store.entries(), []);
     assert_eq!(store.next_id(), 1);
 }
 
