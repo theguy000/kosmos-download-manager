@@ -107,10 +107,10 @@ fn options_save_to_tab_properties_and_navigation() -> Result<(), Box<dyn std::er
     // Test reset default calculation
     let default_dir = PathBuf::from("D:\\Downloads");
     let video_sub = SaveSettings::default_subfolder(&default_dir, Category::Video);
-    assert_eq!(video_sub, PathBuf::from("D:\\Downloads\\Video"));
+    assert_eq!(video_sub, default_dir.join("Video"));
 
     let compressed_sub = SaveSettings::default_subfolder(&default_dir, Category::Compressed);
-    assert_eq!(compressed_sub, PathBuf::from("D:\\Downloads\\Compressed"));
+    assert_eq!(compressed_sub, default_dir.join("Compressed"));
 
     // Verify pointer clicks do not leave focus rings on Save To controls
     let click = |x: f32, y: f32| {
@@ -185,23 +185,18 @@ fn options_save_to_tab_properties_and_navigation() -> Result<(), Box<dyn std::er
 
 #[test]
 fn add_download_category_routing_on_url_change() {
+    let downloads = PathBuf::from("C:\\Users\\user\\Downloads");
     let mut settings = SaveSettings {
-        default_dir: PathBuf::from("C:\\Users\\user\\Downloads"),
+        default_dir: downloads.clone(),
         ..Default::default()
     };
-    settings.set_category_dir(
-        Category::Compressed,
-        Some(PathBuf::from("C:\\Users\\user\\Downloads\\Archives")),
-    );
+    settings.set_category_dir(Category::Compressed, Some(downloads.join("Archives")));
     settings.set_category_dir(Category::Video, Some(PathBuf::from("E:\\Media\\Videos")));
 
-    assert_eq!(
-        settings.category_path(Category::General),
-        PathBuf::from("C:\\Users\\user\\Downloads")
-    );
+    assert_eq!(settings.category_path(Category::General), downloads.clone());
     assert_eq!(
         settings.category_path(Category::Compressed),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Archives")
+        downloads.join("Archives")
     );
     assert_eq!(
         settings.category_path(Category::Video),
@@ -209,16 +204,16 @@ fn add_download_category_routing_on_url_change() {
     );
     assert_eq!(
         settings.category_path(Category::Documents),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Documents")
+        downloads.join("Documents")
     );
 
     assert_eq!(
         settings.path_for_url("https://example.com/download.zip"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Archives")
+        downloads.join("Archives")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/download.tar.gz"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Archives")
+        downloads.join("Archives")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/movie.mkv"),
@@ -226,37 +221,39 @@ fn add_download_category_routing_on_url_change() {
     );
     assert_eq!(
         settings.path_for_url("https://example.com/song.flac"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Music")
+        downloads.join("Music")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/doc.pdf"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Documents")
+        downloads.join("Documents")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/installer.msi"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Programs")
+        downloads.join("Programs")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/api/data?format=raw"),
-        PathBuf::from("C:\\Users\\user\\Downloads")
+        downloads.clone()
     );
     assert_eq!(
         settings.path_for_url("https://example.com/data.tar.bz2"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Archives")
+        downloads.join("Archives")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/audio.opus"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Music")
+        downloads.join("Music")
     );
     assert_eq!(
         settings.path_for_url("https://example.com/sheet.csv"),
-        PathBuf::from("C:\\Users\\user\\Downloads\\Documents")
+        downloads.join("Documents")
     );
 }
 
 #[test]
-fn options_category_defaults_cascade_on_default_dir_change() {
-    let ui = MainWindow::new().unwrap();
+fn options_category_defaults_cascade_on_default_dir_change()
+-> Result<(), Box<dyn std::error::Error>> {
+    let _ = install_test_platform()?;
+    let ui = MainWindow::new()?;
     let old_def = PathBuf::from("C:\\Users\\user\\Downloads");
     let new_def = PathBuf::from("D:\\Downloads");
 
@@ -312,6 +309,8 @@ fn options_category_defaults_cascade_on_default_dir_change() {
     );
 
     assert_eq!(option_dir(&ui, 3), "E:\\CustomMusic");
+
+    Ok(())
 }
 
 #[test]

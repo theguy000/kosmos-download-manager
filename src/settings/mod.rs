@@ -349,7 +349,7 @@ mod tests {
 
         assert_eq!(
             SaveSettings::category_override(
-                "D:\\Downloads\\Compressed",
+                &default_dir.join("Compressed").to_string_lossy(),
                 &default_dir,
                 Category::Compressed
             ),
@@ -386,8 +386,9 @@ mod tests {
 
     #[test]
     fn test_is_managed_path() {
+        let default_dir = PathBuf::from("D:\\Downloads");
         let mut settings = SaveSettings {
-            default_dir: PathBuf::from("D:\\Downloads"),
+            default_dir: default_dir.clone(),
             ..Default::default()
         };
         settings.set_category_dir(
@@ -396,23 +397,24 @@ mod tests {
         );
 
         // Default dir itself
-        assert!(settings.is_managed_path(Path::new("D:\\Downloads")));
+        assert!(settings.is_managed_path(&default_dir));
         // Custom directory
         assert!(settings.is_managed_path(Path::new("D:\\CustomArchives")));
         // Default subfolder for Documents
-        assert!(settings.is_managed_path(Path::new("D:\\Downloads\\Documents")));
+        assert!(settings.is_managed_path(&default_dir.join("Documents")));
         // Default subfolder for Video
-        assert!(settings.is_managed_path(Path::new("D:\\Downloads\\Video")));
+        assert!(settings.is_managed_path(&default_dir.join("Video")));
         // Overridden default subfolder is not matched as custom is active
-        assert!(!settings.is_managed_path(Path::new("D:\\Downloads\\Compressed")));
+        assert!(!settings.is_managed_path(&default_dir.join("Compressed")));
         // Completely unrelated path
         assert!(!settings.is_managed_path(Path::new("D:\\Other\\Folder")));
     }
 
     #[test]
     fn test_file_type_overrides_route_and_classify() {
+        let default_dir = PathBuf::from("D:\\Downloads");
         let mut settings = SaveSettings {
-            default_dir: PathBuf::from("D:\\Downloads"),
+            default_dir: default_dir.clone(),
             ..Default::default()
         };
         settings
@@ -422,7 +424,7 @@ mod tests {
         assert_eq!(settings.category_for_filename("clip.webm"), Category::Video);
         assert_eq!(
             settings.path_for_url("https://example.com/clip.webm"),
-            PathBuf::from("D:\\Downloads\\Video")
+            default_dir.join("Video")
         );
         assert_eq!(
             settings.category_for_filename("movie.mp4"),
