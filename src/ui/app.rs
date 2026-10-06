@@ -15,6 +15,7 @@ use tokio::sync::{mpsc, watch};
 pub fn run_app(
     action_tx: &mpsc::Sender<DownloadAction>,
     snapshot_rx: watch::Receiver<DownloadSnapshot>,
+    initial_url: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let main_window = MainWindow::new()?;
     let state = AppState::new(action_tx.clone(), snapshot_rx);
@@ -30,6 +31,15 @@ pub fn run_app(
     );
     main_window.set_startup_option_visible(cfg!(windows));
     update_sidebar_categories(&main_window, &state.save_settings.borrow());
+
+    if let Some(url) = initial_url {
+        let clean_url = url.trim();
+        let dir = state.save_settings.borrow().path_for_url(clean_url);
+        main_window.set_dest_dir_text(dir.to_string_lossy().as_ref().into());
+        main_window.set_url_text(clean_url.into());
+        main_window.set_show_add_dialog(true);
+        crate::platform::bring_window_to_front("Kosmos Downloader");
+    }
 
     {
         let settings = state.save_settings.borrow();
@@ -58,6 +68,45 @@ pub fn run_app(
     bind_table_handlers(&main_window, &state);
     bind_action_handlers(&main_window, &state);
     bind_delete_handlers(&main_window, &state);
+
+    // IPC server to receive downloads and show requests from browser extension and native host
+    {
+        let window_weak = main_window.as_weak();
+        tokio::spawn(async move {
+            let _ = crate::host::start_ipc_server(move |msg| match msg {
+                crate::host::HostMessage::Download {
+                    url,
+                    filename: _,
+                    referrer: _,
+                    total_bytes: _,
+                    auto_start: _,
+                } => {
+                    let window_weak = window_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(window) = window_weak.upgrade() {
+                            let clean_url = url.trim();
+                            let dir = crate::settings::SaveSettings::load().path_for_url(clean_url);
+                            window.set_dest_dir_text(dir.to_string_lossy().as_ref().into());
+                            window.set_url_text(clean_url.into());
+                            window.set_show_add_dialog(true);
+                            crate::platform::bring_window_to_front("Kosmos Downloader");
+                        }
+                    });
+                    crate::host::HostResponse::ok_with_message("download_prompted")
+                }
+                crate::host::HostMessage::Show => {
+                    let _ = slint::invoke_from_event_loop(|| {
+                        crate::platform::bring_window_to_front("Kosmos Downloader");
+                    });
+                    crate::host::HostResponse::ok_with_message("window_shown")
+                }
+                crate::host::HostMessage::Ping => {
+                    crate::host::HostResponse::ok_with_message("pong")
+                }
+            })
+            .await;
+        });
+    }
 
     let timer = slint::Timer::default();
     {

@@ -17,16 +17,199 @@ fn environment_path(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Opens `path` with the system handler, ignoring files that were moved or removed.
+/// Opens `path` with the system handler on Windows. No-op on other platforms.
+#[cfg(windows)]
 pub(crate) fn open_file(path: &Path) {
     if !path.exists() {
         return;
     }
 
-    if let Some(path_str) = path.to_str() {
-        let _ = std::process::Command::new("cmd")
-            .args(["/c", "start", "", path_str])
-            .spawn();
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    let wide_path: Vec<u16> = OsStr::new(path.as_os_str())
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    // SAFETY: ShellExecuteW is invoked with a valid, null-terminated UTF-16 path pointer.
+    // Standard show flags (SW_SHOWNORMAL) are supplied, and execution is asynchronous.
+    #[allow(unsafe_code)]
+    unsafe {
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(
+                hwnd: isize,
+                lpOperation: *const u16,
+                lpFile: *const u16,
+                lpParameters: *const u16,
+                lpDirectory: *const u16,
+                nShowCmd: i32,
+            ) -> isize;
+        }
+        const SW_SHOWNORMAL: i32 = 1;
+        let _ = ShellExecuteW(
+            0,
+            std::ptr::null(),
+            wide_path.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn open_file(_path: &Path) {}
+
+/// Brings the application window with the specified title to the foreground.
+pub(crate) fn bring_window_to_front(title: &str) {
+    #[cfg(windows)]
+    {
+        bring_window_to_front_windows(title);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = title;
+    }
+}
+
+/// Allows background and child processes to set foreground window on Windows.
+pub fn allow_foreground_activation() {
+    #[cfg(windows)]
+    {
+        // SAFETY: AllowSetForegroundWindow is a standard Win32 user32 function.
+        // ASFW_ANY (0xFFFF_FFFF) grants permission to all processes to take the foreground.
+        #[allow(unsafe_code)]
+        unsafe {
+            #[link(name = "user32")]
+            unsafe extern "system" {
+                fn AllowSetForegroundWindow(dwProcessId: u32) -> i32;
+            }
+            const ASFW_ANY: u32 = 0xFFFF_FFFF;
+            let _ = AllowSetForegroundWindow(ASFW_ANY);
+        }
+    }
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn bring_window_to_front_windows(title: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    let wide_title: Vec<u16> = OsStr::new(title)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    // SAFETY: Win32 API functions are called with valid null-terminated wide string pointer and checked handles.
+    unsafe {
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn FindWindowW(lpClassName: *const u16, lpWindowName: *const u16) -> isize;
+            fn ShowWindow(hWnd: isize, nCmdShow: i32) -> i32;
+            fn SetForegroundWindow(hWnd: isize) -> i32;
+            fn BringWindowToTop(hWnd: isize) -> i32;
+            fn GetForegroundWindow() -> isize;
+            fn GetWindowThreadProcessId(hWnd: isize, lpdwProcessId: *mut u32) -> u32;
+            fn AttachThreadInput(idAttach: u32, idAttachTo: u32, fAttach: i32) -> i32;
+            fn SetWindowPos(
+                hWnd: isize,
+                hWndInsertAfter: isize,
+                X: i32,
+                Y: i32,
+                cx: i32,
+                cy: i32,
+                uFlags: u32,
+            ) -> i32;
+            fn EnumWindows(
+                lpEnumFunc: unsafe extern "system" fn(isize, isize) -> i32,
+                lParam: isize,
+            ) -> i32;
+            fn IsWindowVisible(hWnd: isize) -> i32;
+        }
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentThreadId() -> u32;
+            fn GetCurrentProcessId() -> u32;
+        }
+
+        let mut hwnd = FindWindowW(std::ptr::null(), wide_title.as_ptr());
+        if hwnd == 0 {
+            // Fallback: find any visible window belonging to the current process
+            let current_pid = GetCurrentProcessId();
+            struct EnumData {
+                pid: u32,
+                found_hwnd: isize,
+            }
+            let mut data = EnumData {
+                pid: current_pid,
+                found_hwnd: 0,
+            };
+            unsafe extern "system" fn enum_proc(w: isize, lparam: isize) -> i32 {
+                // SAFETY: `lparam` was passed to EnumWindows as a valid pointer to a live `EnumData` stack allocation.
+                let d = unsafe { &mut *(lparam as *mut EnumData) };
+                let mut proc_id = 0u32;
+                // SAFETY: GetWindowThreadProcessId is called with a checked pointer to a stack-allocated u32.
+                unsafe { GetWindowThreadProcessId(w, std::ptr::addr_of_mut!(proc_id)) };
+                // SAFETY: IsWindowVisible accepts any window handle and safely returns 0 if invalid.
+                if proc_id == d.pid && unsafe { IsWindowVisible(w) } != 0 {
+                    d.found_hwnd = w;
+                    return 0;
+                }
+                1
+            }
+            EnumWindows(enum_proc, std::ptr::addr_of_mut!(data) as isize);
+            hwnd = data.found_hwnd;
+        }
+
+        if hwnd != 0 {
+            const SW_RESTORE: i32 = 9;
+            const SW_SHOW: i32 = 5;
+            const HWND_TOPMOST: isize = -1;
+            const HWND_NOTOPMOST: isize = -2;
+            const SWP_NOMOVE: u32 = 0x0002;
+            const SWP_NOSIZE: u32 = 0x0001;
+            const SWP_SHOWWINDOW: u32 = 0x0040;
+
+            let fg_hwnd = GetForegroundWindow();
+            let fg_thread = GetWindowThreadProcessId(fg_hwnd, std::ptr::null_mut());
+            let cur_thread = GetCurrentThreadId();
+
+            if fg_thread != 0 && fg_thread != cur_thread {
+                AttachThreadInput(cur_thread, fg_thread, 1);
+            }
+
+            ShowWindow(hwnd, SW_SHOW);
+            ShowWindow(hwnd, SW_RESTORE);
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
+
+            // Momentarily set topmost and then clear it to guarantee the window is placed above the browser
+            SetWindowPos(
+                hwnd,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+            );
+            SetWindowPos(
+                hwnd,
+                HWND_NOTOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+            );
+
+            if fg_thread != 0 && fg_thread != cur_thread {
+                AttachThreadInput(cur_thread, fg_thread, 0);
+            }
+        }
     }
 }
 

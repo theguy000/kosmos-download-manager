@@ -1133,3 +1133,35 @@ fn add_download_dialog_resets_url_when_opened() -> Result<(), Box<dyn std::error
 
     Ok(())
 }
+
+#[test]
+fn native_download_prompt_displays_popup_with_url() -> Result<(), Box<dyn std::error::Error>> {
+    let (_window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+
+    assert!(!ui.get_show_add_dialog());
+
+    let test_url = "https://speed.hetzner.de/100MB.bin";
+    let dest_dir = crate::settings::SaveSettings::load().path_for_url(test_url);
+    ui.set_dest_dir_text(dest_dir.to_string_lossy().as_ref().into());
+    ui.set_url_text(test_url.into());
+    ui.set_show_add_dialog(true);
+
+    assert!(
+        ui.get_show_add_dialog(),
+        "Dialog must be shown when triggered"
+    );
+    assert_eq!(
+        ui.get_url_text(),
+        test_url,
+        "URL must be populated in dialog"
+    );
+    assert_eq!(
+        ui.get_dest_dir_text(),
+        dest_dir.to_string_lossy().as_ref(),
+        "Destination directory must be populated in dialog"
+    );
+
+    Ok(())
+}

@@ -73,6 +73,7 @@ pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
 
     {
         let tx = state.action_tx.clone();
+        let save_settings = state.save_settings.clone();
         let window_weak = window.as_weak();
         window.on_start_download(move || {
             if let Some(window) = window_weak.upgrade() {
@@ -81,12 +82,17 @@ pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
                 let streams = window.get_streams_count().round() as usize;
 
                 if !url.is_empty() {
+                    let save_path = if dest.is_empty() {
+                        save_settings.borrow().path_for_url(&url)
+                    } else {
+                        PathBuf::from(dest)
+                    };
                     if send_action(
                         &window,
                         &tx,
                         DownloadAction::Start {
                             url,
-                            save_path: PathBuf::from(dest),
+                            save_path,
                             num_chunks: streams.clamp(1, 16),
                         },
                     ) {

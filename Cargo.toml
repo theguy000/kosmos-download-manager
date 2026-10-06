@@ -56,3 +56,9 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
+

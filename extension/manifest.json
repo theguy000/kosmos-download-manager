@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "KDM Integration Module",
+  "version": "1.0.0",
+  "description": "Integrates browser downloads with KDM desktop application.",
+  "permissions": [
+    "downloads",
+    "nativeMessaging",
+    "contextMenus",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "KDM Integration Module",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlWX2TB5hLOFd9hbVLliKXavzNNVeKpQo1YdpgP+cUDrNH6VFQPcPN9MQ0o7/UbkFEUdG/6fK+j2yiiE/0UhM+edRwUTIET6gEaz1p8v7bgZYWI2chroe8KC1BbwkHodM42YM8JuqhKSAO6qkodYSbXsAiJA/Ft85kptH/To0f6p/6o3YiLM5qG/lKU+vdcWFOF6iuDc9/bWt1HH1fnsdbCSk2783Ss8PTBz1gxVyM+rDtxREputCUZ61IbLjnLtfMdaRLDB8WYYRv3eoaHdFx71D399PZTKmasMxxdBveQ0dp9gn3LJCoAmy4U7pME2aZMc7xRCwbBa/OvdrGaS5aQIDAQAB"
+}
