@@ -163,7 +163,10 @@ export component MainWindow inherits Window {
             can-stop-all: root.can_stop_all;
             can-delete-selected: root.can_delete_selected;
             can-delete-completed: root.can_delete_completed;
-            show-add-dialog => { root.show_add_dialog = true; }
+            show-add-dialog => {
+                root.url_text = "";
+                root.show_add_dialog = true;
+            }
             show-options-dialog => { root.show_options_dialog = true; }
             pause-download => { root.pause_download(); }
             resume-download => { root.resume_download(); }

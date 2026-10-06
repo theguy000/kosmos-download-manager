@@ -90,6 +90,7 @@ pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
                             num_chunks: streams.clamp(1, 16),
                         },
                     ) {
+                        window.set_url_text("".into());
                         window.set_selected_row(0);
                         window.set_selected_category(0);
                         update_selection_state(&window, 0);

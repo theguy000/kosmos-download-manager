@@ -87,6 +87,7 @@ export component AddDownloadDialog inherits Rectangle {
                     Text { text: "URL:"; width: 55px; font-size: 11px; color: Palette.text-muted; vertical-alignment: center; }
                     url_input := DialogInput {
                         text <=> root.url_text;
+                        placeholder-text: "Paste your URL here";
                         label: "URL";
                         accepted => { root.submit(); }
                     }

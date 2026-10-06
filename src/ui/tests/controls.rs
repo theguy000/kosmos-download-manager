@@ -732,6 +732,8 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         // the fill: ring pixel, 1px panel gap, then the fill. A ring on the fill itself
         // would be the same blue and therefore invisible.
         click(39.0, 52.0);
+        assert!(ui.get_url_text().is_empty(), "Add URL opens with empty URL");
+        ui.set_url_text("https://example.com/file.zip".into());
         render();
         for _ in 0..5 {
             window.dispatch_event(WindowEvent::KeyPressed {
@@ -1099,6 +1101,35 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         assert_eq!(ui.get_sort_column(), 3);
         assert!(ui.get_sort_ascending(), "a new column restarts ascending");
     }
+
+    Ok(())
+}
+
+#[test]
+fn add_download_dialog_resets_url_when_opened() -> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+
+    ui.set_url_text("https://example.com/previous.zip".into());
+    assert_eq!(ui.get_url_text(), "https://example.com/previous.zip");
+
+    // Click Add URL toolbar button (located at x: 39.0, y: 52.0).
+    let position = slint::LogicalPosition::new(39.0, 52.0);
+    window.dispatch_event(slint::platform::WindowEvent::PointerPressed {
+        position,
+        button: slint::platform::PointerEventButton::Left,
+    });
+    window.dispatch_event(slint::platform::WindowEvent::PointerReleased {
+        position,
+        button: slint::platform::PointerEventButton::Left,
+    });
+
+    assert!(ui.get_show_add_dialog(), "Add URL button opens dialog");
+    assert!(
+        ui.get_url_text().is_empty(),
+        "Add URL resets URL input so previous URL is not shown"
+    );
 
     Ok(())
 }
