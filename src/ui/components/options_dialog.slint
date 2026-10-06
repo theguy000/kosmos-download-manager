@@ -1,4 +1,5 @@
 import { Palette } from "theme.slint";
+import { ScrollView } from "std-widgets.slint";
 import {
     ComboItem,
     DialogCheckBox,
@@ -92,6 +93,7 @@ export component OptionsDialog inherits Rectangle {
 
     changed categories => { root.sync_to_input(); }
     changed save_to_category => { root.sync_to_input(); }
+    changed selected_tab => { content_scroll.content-y = 0; }
 
     background: Palette.overlay;
     forward-focus: dialog_focus;
@@ -232,18 +234,19 @@ export component OptionsDialog inherits Rectangle {
                     vertical-stretch: 1;
                     background: Palette.background;
 
-                    VerticalLayout {
-                        visible: root.selected_tab == 0;
-                        alignment: start;
-                        padding: 16px;
-                        spacing: 8px;
+                    content_scroll := ScrollView {
+                        VerticalLayout {
+                            visible: root.selected_tab == 0;
+                            alignment: start;
+                            padding: 16px;
+                            spacing: 8px;
 
-                        startup_box := DialogCheckBox {
-                            visible: root.startup_stop;
-                            checked <=> root.launch_on_startup;
-                            text: "Launch Kosmos Downloader on startup";
+                            startup_box := DialogCheckBox {
+                                visible: root.startup_stop;
+                                checked <=> root.launch_on_startup;
+                                text: "Launch Kosmos Downloader on startup";
+                            }
                         }
-                    }
 
                     VerticalLayout {
                         visible: root.selected_tab == 2;
@@ -387,6 +390,7 @@ export component OptionsDialog inherits Rectangle {
                         }
                     }
                 }
+            }
 
                 // Footer actions
                 HorizontalLayout {
