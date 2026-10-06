@@ -34,6 +34,7 @@ export component MainWindow inherits Window {
     in-out property <[CategoryOption]> options_categories: [];
     in property <[ComboItem]> options_combo_items: [];
     in-out property <int> options_save_category: 0;
+    in-out property <bool> options_use_kdm_folder: false;
     in-out property <bool> startup_option_visible: false;
     in-out property <bool> show_delete_dialog: false;
     in-out property <bool> show_duplicate_dialog: false;
@@ -126,6 +127,7 @@ export component MainWindow inherits Window {
     callback reset_options_category_default(int);
     callback default_dir_edited(string, string);
     callback toggle_options_category_list(int);
+    callback toggle_options_kdm_folder(bool);
     callback add_dialog_opened();
     callback url_text_changed(string);
 
@@ -244,9 +246,11 @@ export component MainWindow inherits Window {
         launch-on-startup <=> root.options_launch_on_startup;
         startup-option-visible: root.startup_option_visible;
         save-to-category <=> root.options_save_category;
+        use-kdm-folder <=> root.options_use_kdm_folder;
         categories <=> root.options_categories;
         combo-items: root.options_combo_items;
         toggle-category-list(cat) => { root.toggle_options_category_list(cat); }
+        toggle-kdm-folder(val) => { root.toggle_options_kdm_folder(val); }
         browse-category-folder(cat) => { root.browse_options_folder(cat); }
         reset-category-default(cat) => { root.reset_options_category_default(cat); }
         default-dir-edited(old, new) => { root.default_dir_edited(old, new); }

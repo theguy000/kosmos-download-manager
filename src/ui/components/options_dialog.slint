@@ -25,6 +25,7 @@ export component OptionsDialog inherits Rectangle {
 
     // Save To tab. Index 0 is the default directory.
     in-out property <int> save_to_category: 0;
+    in-out property <bool> use_kdm_folder: false;
     in-out property <[CategoryOption]> categories: [];
     in property <[ComboItem]> combo_items: [];
 
@@ -41,7 +42,7 @@ export component OptionsDialog inherits Rectangle {
     private property <bool> startup_stop: root.startup_option_visible && root.selected_tab == 0;
     private property <bool> save_to_tab: root.selected_tab == 2;
     private property <int> stop_count: root.startup_stop ? 4
-        : (root.save_to_tab ? (root.save_to_category == 0 ? 7 : 8) : 3);
+        : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : 3);
 
     private property <string> current_category_name:
         root.categories.length > root.save_to_category
@@ -54,9 +55,10 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab && path_input.has_keyboard_focus ? 2
         : (root.save_to_tab && browse_button.has-keyboard-focus ? 3
         : (root.save_to_tab && reset_button.has-keyboard-focus ? 4
-        : (root.save_to_tab && types_input.has-keyboard_focus ? 5
+        : (root.save_to_tab && root.save_to_category != 0 && types_input.has-keyboard_focus ? 5
+        : (root.save_to_tab && kdm_box.has-keyboard-focus ? (root.save_to_category == 0 ? 5 : 6)
         : (ok_button.has-keyboard-focus ? root.stop_count - 2
-        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))));
+        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1)))))))));
 
     private property <bool> keyboard_focused: false;
 
@@ -66,6 +68,7 @@ export component OptionsDialog inherits Rectangle {
     callback reset_category_default(int);
     callback default_dir_edited(string, string);
     callback toggle_category_list(int);
+    callback toggle_kdm_folder(bool);
 
     function sync_to_input() {
         if root.categories.length == 0 { return; }
@@ -82,6 +85,7 @@ export component OptionsDialog inherits Rectangle {
         else if root.save_to_tab && index == 3 { browse_button.take-focus(); }
         else if root.save_to_tab && index == 4 { reset_button.take-focus(); }
         else if root.save_to_tab && root.save_to_category != 0 && index == 5 { types_input.take-focus(); }
+        else if root.save_to_tab && ((root.save_to_category == 0 && index == 5) || (root.save_to_category != 0 && index == 6)) { kdm_box.take-focus(); }
         else if index == root.stop_count - 2 { ok_button.take-focus(); }
         else { cancel_button.take-focus(); }
     }
@@ -371,6 +375,14 @@ export component OptionsDialog inherits Rectangle {
                                     color: Palette.text-muted;
                                     vertical-alignment: center;
                                 }
+                            }
+                        }
+
+                        kdm_box := DialogCheckBox {
+                            checked <=> root.use_kdm_folder;
+                            text: "Route downloads to KDM folder";
+                            changed checked => {
+                                root.toggle_kdm_folder(self.checked);
                             }
                         }
                     }

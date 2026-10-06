@@ -92,6 +92,19 @@ pub(crate) fn toggle_category_list(window: &MainWindow, category: Category) {
     update_options_combo_items(window);
 }
 
+pub(crate) fn toggle_kdm_folder(window: &MainWindow, enabled: bool) {
+    let categories = options_snapshot(window);
+    let current_default = PathBuf::from(category_dir(&categories, Category::General).as_str());
+    let new_default = SaveSettings::apply_kdm_folder(&current_default, enabled);
+
+    if new_default != current_default {
+        update_option(window, Category::General, |option| {
+            option.dir = new_default.to_string_lossy().as_ref().into();
+        });
+        update_category_defaults(window, &current_default, &new_default);
+    }
+}
+
 pub(crate) fn update_category_defaults(
     window: &MainWindow,
     old_default: &Path,
@@ -124,7 +137,9 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
         let save_settings = state.save_settings.clone();
         window.on_options_opened(move || {
             if let Some(window) = window_weak.upgrade() {
-                load_options_categories(&window, &save_settings.borrow());
+                let settings = save_settings.borrow();
+                load_options_categories(&window, &settings);
+                window.set_options_use_kdm_folder(settings.use_kdm_folder);
             }
 
             let window_weak = window_weak.clone();
@@ -149,6 +164,15 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
             };
             if let Some(window) = window_weak.upgrade() {
                 toggle_category_list(&window, category);
+            }
+        });
+    }
+
+    {
+        let window_weak = window.as_weak();
+        window.on_toggle_options_kdm_folder(move |enabled| {
+            if let Some(window) = window_weak.upgrade() {
+                toggle_kdm_folder(&window, enabled);
             }
         });
     }
@@ -216,7 +240,10 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 let categories = options_snapshot(&window);
                 if category == Category::General {
                     let old_default = category_dir(&categories, Category::General);
-                    let new_default = default_download_directory();
+                    let new_default = SaveSettings::apply_kdm_folder(
+                        &default_download_directory(),
+                        window.get_options_use_kdm_folder(),
+                    );
                     update_option(&window, category, |option| {
                         option.dir = new_default.to_string_lossy().as_ref().into();
                     });
@@ -249,14 +276,22 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 let categories = options_snapshot(&window);
                 let default_dir_raw = category_dir(&categories, Category::General);
                 let default_dir_trimmed = default_dir_raw.trim();
-                let default_dir = if default_dir_trimmed.is_empty() {
-                    default_download_directory()
+                let use_kdm = window.get_options_use_kdm_folder();
+                let effective_default = if default_dir_trimmed.is_empty() {
+                    SaveSettings::apply_kdm_folder(&default_download_directory(), use_kdm)
                 } else {
                     PathBuf::from(default_dir_trimmed)
                 };
 
+                let default_dir = if use_kdm {
+                    SaveSettings::apply_kdm_folder(&effective_default, false)
+                } else {
+                    effective_default.clone()
+                };
+
                 let mut new_settings = SaveSettings {
-                    default_dir: default_dir.clone(),
+                    default_dir,
+                    use_kdm_folder: use_kdm,
                     ..Default::default()
                 };
                 for option in &categories {
@@ -265,7 +300,11 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     {
                         new_settings.set_category_dir(
                             category,
-                            SaveSettings::category_override(&option.dir, &default_dir, category),
+                            SaveSettings::category_override(
+                                &option.dir,
+                                &effective_default,
+                                category,
+                            ),
                         );
                         if let Some(extensions) =
                             SaveSettings::file_type_override(category, &option.file_types)
@@ -278,7 +317,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
 
                 *save_settings.borrow_mut() = new_settings.clone();
                 update_sidebar_categories(&window, &new_settings);
-                window.set_dest_dir_text(default_dir.to_string_lossy().as_ref().into());
+                window.set_dest_dir_text(effective_default.to_string_lossy().as_ref().into());
 
                 {
                     let settings = save_settings.borrow();

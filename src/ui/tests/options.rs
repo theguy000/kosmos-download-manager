@@ -4,7 +4,7 @@ use super::support::{
 };
 use crate::settings::{Category, SaveSettings};
 use crate::ui::handlers::options::{
-    toggle_category_list, update_category_defaults, update_options_combo_items,
+    toggle_category_list, toggle_kdm_folder, update_category_defaults, update_options_combo_items,
 };
 use crate::ui::handlers::sidebar::update_sidebar_categories;
 use crate::ui::view::MainWindow;
@@ -837,6 +837,37 @@ fn test_sidebar_categories_reflect_active_state() -> Result<(), Box<dyn std::err
         .map(|s| s.id)
         .collect();
     assert!(subcats.contains(&4));
+
+    Ok(())
+}
+
+#[test]
+fn test_toggle_kdm_folder() -> Result<(), Box<dyn std::error::Error>> {
+    let (_window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+
+    set_option_dir(&ui, 0, "D:\\Downloads");
+    set_option_dir(&ui, 1, "D:\\Downloads\\Compressed");
+    set_option_dir(&ui, 2, "D:\\Downloads\\Documents");
+    set_option_dir(&ui, 3, "E:\\CustomMusic");
+
+    // Enable KDM folder
+    toggle_kdm_folder(&ui, true);
+    assert_eq!(option_dir(&ui, 0), "D:\\Downloads\\KDM");
+    assert_eq!(option_dir(&ui, 1), "D:\\Downloads\\KDM\\Compressed");
+    assert_eq!(option_dir(&ui, 2), "D:\\Downloads\\KDM\\Documents");
+    assert_eq!(
+        option_dir(&ui, 3),
+        "E:\\CustomMusic",
+        "Custom directory stays untouched"
+    );
+
+    // Disable KDM folder
+    toggle_kdm_folder(&ui, false);
+    assert_eq!(option_dir(&ui, 0), "D:\\Downloads");
+    assert_eq!(option_dir(&ui, 1), "D:\\Downloads\\Compressed");
+    assert_eq!(option_dir(&ui, 2), "D:\\Downloads\\Documents");
+    assert_eq!(option_dir(&ui, 3), "E:\\CustomMusic");
 
     Ok(())
 }

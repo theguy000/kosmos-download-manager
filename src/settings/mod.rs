@@ -16,6 +16,8 @@ const SETTINGS_FILE_NAME: &str = "save_settings.json";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
+    #[serde(default)]
+    pub use_kdm_folder: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub category_dirs: BTreeMap<Category, PathBuf>,
     /// Extension lists that override the built-in defaults, keyed by category.
@@ -31,6 +33,7 @@ impl Default for SaveSettings {
     fn default() -> Self {
         Self {
             default_dir: default_download_directory(),
+            use_kdm_folder: false,
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
@@ -72,6 +75,33 @@ impl SaveSettings {
         self.category_dirs.get(&category).map(PathBuf::as_path)
     }
 
+    pub const KDM_FOLDER_NAME: &str = "KDM";
+
+    /// Applies or strips the KDM folder suffix from `path` based on `enabled`.
+    #[must_use]
+    pub fn apply_kdm_folder(path: &Path, enabled: bool) -> PathBuf {
+        if enabled {
+            if path.ends_with(Self::KDM_FOLDER_NAME) {
+                path.to_path_buf()
+            } else {
+                path.join(Self::KDM_FOLDER_NAME)
+            }
+        } else if path.ends_with(Self::KDM_FOLDER_NAME) {
+            path.parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or(path)
+                .to_path_buf()
+        } else {
+            path.to_path_buf()
+        }
+    }
+
+    /// The base directory all default downloads route through, taking `use_kdm_folder` into account.
+    #[must_use]
+    pub fn effective_default_dir(&self) -> PathBuf {
+        Self::apply_kdm_folder(&self.default_dir, self.use_kdm_folder)
+    }
+
     /// Points a category at a custom directory, or back at its default subfolder with `None`.
     pub fn set_category_dir(&mut self, category: Category, dir: Option<PathBuf>) {
         if category == Category::General {
@@ -88,7 +118,7 @@ impl SaveSettings {
     #[must_use]
     pub fn category_path(&self, category: Category) -> PathBuf {
         self.custom_dir(category).map_or_else(
-            || Self::default_subfolder(&self.default_dir, category),
+            || Self::default_subfolder(&self.effective_default_dir(), category),
             Path::to_path_buf,
         )
     }
@@ -198,6 +228,7 @@ impl SaveSettings {
     #[must_use]
     pub fn is_managed_path(&self, path: &Path) -> bool {
         path == self.default_dir
+            || path == self.effective_default_dir()
             || Category::ALL.iter().any(|&category| {
                 category != Category::General
                     && self.is_category_active(category)
@@ -270,6 +301,7 @@ mod tests {
 
         let original = SaveSettings {
             default_dir: PathBuf::from("D:\\Downloads"),
+            use_kdm_folder: false,
             category_dirs: BTreeMap::from([
                 (
                     Category::Compressed,
@@ -516,6 +548,63 @@ mod tests {
         assert!(
             !settings.is_managed_path(Path::new("D:\\Downloads\\Compressed")),
             "A disabled category's folder is no longer managed"
+        );
+    }
+
+    #[test]
+    fn test_kdm_folder_routing() {
+        let base_dir = PathBuf::from("D:\\Downloads");
+        let mut settings = SaveSettings {
+            default_dir: base_dir.clone(),
+            use_kdm_folder: false,
+            ..Default::default()
+        };
+
+        assert_eq!(settings.effective_default_dir(), base_dir);
+        assert_eq!(settings.category_path(Category::General), base_dir);
+        assert_eq!(
+            settings.category_path(Category::Compressed),
+            base_dir.join("Compressed")
+        );
+        assert_eq!(
+            settings.path_for_url("https://example.com/test.zip"),
+            base_dir.join("Compressed")
+        );
+
+        settings.use_kdm_folder = true;
+        let kdm_dir = base_dir.join("KDM");
+        assert_eq!(settings.effective_default_dir(), kdm_dir);
+        assert_eq!(settings.category_path(Category::General), kdm_dir);
+        assert_eq!(
+            settings.category_path(Category::Compressed),
+            kdm_dir.join("Compressed")
+        );
+        assert_eq!(
+            settings.category_path(Category::Video),
+            kdm_dir.join("Video")
+        );
+        assert_eq!(
+            settings.path_for_url("https://example.com/test.zip"),
+            kdm_dir.join("Compressed")
+        );
+        assert_eq!(
+            settings.path_for_url("https://example.com/movie.mp4"),
+            kdm_dir.join("Video")
+        );
+        assert_eq!(
+            settings.path_for_url("https://example.com/unknown.xyz"),
+            kdm_dir
+        );
+
+        assert!(settings.is_managed_path(&kdm_dir));
+        assert!(settings.is_managed_path(&kdm_dir.join("Compressed")));
+        assert!(settings.is_managed_path(&base_dir));
+
+        settings.use_kdm_folder = false;
+        assert_eq!(settings.effective_default_dir(), base_dir);
+        assert_eq!(
+            settings.path_for_url("https://example.com/test.zip"),
+            base_dir.join("Compressed")
         );
     }
 }
