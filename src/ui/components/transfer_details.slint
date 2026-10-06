@@ -1,24 +1,5 @@
 import { Palette } from "theme.slint";
 import { Navigation } from "navigation.slint";
-export component PausedTransferDetails inherits Rectangle {
-    in property <bool> is_resumable: false;
-
-    min-height: 48px;
-    vertical-stretch: 0;
-    background: Palette.surface-alt;
-
-    VerticalLayout {
-        padding: 12px;
-        Text {
-            text: root.is_resumable ? "Stopped. Select the download and choose Resume to continue." :
-                "Stopped. Resume is unavailable for this download; Restart downloads the file from the beginning.";
-            color: Palette.text-secondary;
-            font-size: 11px;
-            wrap: word-wrap;
-            vertical-alignment: center;
-        }
-    }
-}
 
 export component StatusFooter inherits Rectangle {
     in property <int> selected_category: 0;

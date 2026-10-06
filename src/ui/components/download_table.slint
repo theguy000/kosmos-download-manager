@@ -2,7 +2,6 @@ import { Palette } from "theme.slint";
 import { FocusStyle } from "controls.slint";
 import { Navigation } from "navigation.slint";
 import { FileTypeIcon } from "icons.slint";
-import { PausedTransferDetails } from "transfer_details.slint";
 import { ScrollView } from "std-widgets.slint";
 
 export struct TableItem {
@@ -223,8 +222,6 @@ export component DownloadTable inherits ScrollView {
     in property <bool> active_row_visible: false;
     in-out property <int> selected_row: 0;
     in property <bool> is_completed: false;
-    in property <bool> is_paused: false;
-    in property <bool> is_resumable: false;
     in property <string> active_filename: "";
     in property <string> active_file_type: "doc";
     in property <string> active_size: "0 B";
@@ -485,9 +482,6 @@ export component DownloadTable inherits ScrollView {
                     wrap: word-wrap;
                 }
             }
-        }
-        if root.active_row_visible && root.is_paused: PausedTransferDetails {
-            is-resumable: root.is_resumable;
         }
     }
 }
