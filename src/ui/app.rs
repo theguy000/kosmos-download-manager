@@ -38,7 +38,7 @@ pub fn run_app(
         main_window.set_dest_dir_text(dir.to_string_lossy().as_ref().into());
         main_window.set_url_text(clean_url.into());
         main_window.set_show_add_dialog(true);
-        crate::platform::bring_window_to_front("Kosmos Downloader");
+        crate::platform::bring_window_to_front("Kosmos Download Manager");
     }
 
     {
@@ -89,14 +89,14 @@ pub fn run_app(
                             window.set_dest_dir_text(dir.to_string_lossy().as_ref().into());
                             window.set_url_text(clean_url.into());
                             window.set_show_add_dialog(true);
-                            crate::platform::bring_window_to_front("Kosmos Downloader");
+                            crate::platform::bring_window_to_front("Kosmos Download Manager");
                         }
                     });
                     crate::host::HostResponse::ok_with_message("download_prompted")
                 }
                 crate::host::HostMessage::Show => {
                     let _ = slint::invoke_from_event_loop(|| {
-                        crate::platform::bring_window_to_front("Kosmos Downloader");
+                        crate::platform::bring_window_to_front("Kosmos Download Manager");
                     });
                     crate::host::HostResponse::ok_with_message("window_shown")
                 }

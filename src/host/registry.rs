@@ -29,7 +29,7 @@ pub fn default_allowed_origins(additional_ids: &[String]) -> Vec<String> {
 pub fn generate_manifest(host_exe: &Path, origins: &[String]) -> serde_json::Value {
     json!({
         "name": HOST_NAME,
-        "description": "Kosmos Downloader Native Messaging Host",
+        "description": "Kosmos Download Manager Native Messaging Host",
         "path": host_exe.to_string_lossy(),
         "type": "stdio",
         "allowed_origins": origins
@@ -82,7 +82,7 @@ pub fn register_host(
             "/f",
         ])?;
         if !status.success() {
-            eprintln!("[kosmos-host] Warning: reg add failed for {key}: {status}");
+            eprintln!("[kdm-host] Warning: reg add failed for {key}: {status}");
         }
     }
 
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_generate_manifest() {
-        let exe = Path::new(r"C:\Program Files\Kosmos\kosmos-downloader.exe");
+        let exe = Path::new(r"C:\Program Files\Kosmos\kosmos-download-manager.exe");
         let origins = vec!["chrome-extension://abc/".to_string()];
         let val = generate_manifest(exe, &origins);
 

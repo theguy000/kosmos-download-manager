@@ -1,4 +1,4 @@
-# PowerShell script to register Kosmos Downloader Native Messaging Host for Edge, Chrome, and Brave
+# PowerShell script to register Kosmos Download Manager Native Messaging Host for Edge, Chrome, and Brave
 [CmdletBinding()]
 param (
     [string]$HostExecutablePath = ""
@@ -6,17 +6,20 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== Kosmos Downloader Native Host Installer ===" -ForegroundColor Cyan
+Write-Host "=== Kosmos Download Manager Native Host Installer ===" -ForegroundColor Cyan
 
 # 1. Determine Host Executable Path
 if ([string]::IsNullOrWhiteSpace($HostExecutablePath)) {
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
     $rootDir = Split-Path -Parent $scriptDir
     $candidates = @(
+        (Join-Path $rootDir "target\release\kosmos-download-manager.exe"),
+        (Join-Path $rootDir "target\debug\kosmos-download-manager.exe"),
         (Join-Path $rootDir "target\release\kosmos-downloader.exe"),
         (Join-Path $rootDir "target\debug\kosmos-downloader.exe"),
         (Join-Path $rootDir "target\release\kosmos-native-host.exe"),
         (Join-Path $rootDir "target\debug\kosmos-native-host.exe"),
+        (Join-Path $scriptDir "kosmos-download-manager.exe"),
         (Join-Path $scriptDir "kosmos-downloader.exe")
     )
     foreach ($cand in $candidates) {
@@ -32,7 +35,7 @@ if (-not (Test-Path $HostExecutablePath)) {
     Push-Location (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
     cargo build
     Pop-Location
-    $HostExecutablePath = (Resolve-Path (Join-Path $rootDir "target\debug\kosmos-downloader.exe")).Path
+    $HostExecutablePath = (Resolve-Path (Join-Path $rootDir "target\debug\kosmos-download-manager.exe")).Path
 }
 
 Write-Host "Target Executable: $HostExecutablePath" -ForegroundColor Green
@@ -45,7 +48,7 @@ try {
     Write-Host "Falling back to direct registry installation..." -ForegroundColor Yellow
 
     $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
-    $kosmosDir = Join-Path $localAppData "Kosmos Downloader"
+    $kosmosDir = Join-Path $localAppData "Kosmos Download Manager"
     if (-not (Test-Path $kosmosDir)) {
         New-Item -ItemType Directory -Path $kosmosDir -Force | Out-Null
     }
@@ -53,7 +56,7 @@ try {
     $manifestPath = Join-Path $kosmosDir "com.kosmos.downloader.json"
     $manifestJson = @{
         "name" = "com.kosmos.downloader"
-        "description" = "Kosmos Downloader Native Messaging Host"
+        "description" = "Kosmos Download Manager Native Messaging Host"
         "path" = $HostExecutablePath
         "type" = "stdio"
         "allowed_origins" = @(

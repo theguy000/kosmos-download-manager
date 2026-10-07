@@ -46,7 +46,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     referrer: info.pageUrl || (tab ? tab.url : undefined)
   }, (response) => {
     if (chrome.runtime.lastError || !response || response.status !== "ok") {
-      console.warn("[Kosmos] Context menu download trigger failed:", chrome.runtime.lastError, response);
+      console.warn("[KDM] Context menu download trigger failed:", chrome.runtime.lastError, response);
     }
   });
 });
@@ -63,7 +63,7 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     return false;
   }
 
-  // Defer determination asynchronously and forward to Kosmos Downloader
+  // Defer determination asynchronously and forward to Kosmos Download Manager
   sendToNativeHost({
     action: "download",
     url: downloadUrl,
@@ -72,11 +72,11 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     total_bytes: item.fileSize > 0 ? item.fileSize : (item.totalBytes > 0 ? item.totalBytes : undefined)
   }, (response) => {
     if (chrome.runtime.lastError || !response || response.status !== "ok") {
-      console.warn("[Kosmos] Native host did not handle download; continuing in browser:", chrome.runtime.lastError, response);
+      console.warn("[KDM] Native host did not handle download; continuing in browser:", chrome.runtime.lastError, response);
       // Fallback: let browser proceed with download
       suggest();
     } else {
-      // Successfully handed over to Kosmos Downloader! Cancel browser download
+      // Successfully handed over to Kosmos Download Manager! Cancel browser download
       chrome.downloads.cancel(item.id, () => {
         if (chrome.runtime.lastError) {
           suggest();
@@ -98,7 +98,7 @@ function sendToNativeHost(message, callback) {
       }
     });
   } catch (err) {
-    console.error("[Kosmos] sendNativeMessage exception:", err);
+    console.error("[KDM] sendNativeMessage exception:", err);
     if (callback) {
       callback(null);
     }

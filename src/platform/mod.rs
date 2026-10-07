@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-pub(crate) const DATA_DIRECTORY_NAME: &str = "Kosmos Downloader";
+pub(crate) const DATA_DIRECTORY_NAME: &str = "Kosmos Download Manager";
 
 pub(crate) fn data_directory() -> PathBuf {
     if let Some(directory) = environment_path("LOCALAPPDATA") {
@@ -226,11 +226,11 @@ pub(crate) fn default_download_directory() -> PathBuf {
 #[cfg(windows)]
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 #[cfg(windows)]
-const VALUE_NAME: &str = "Kosmos Downloader";
+const VALUE_NAME: &str = "Kosmos Download Manager";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Whether Kosmos Downloader is registered to launch at user sign-in.
+/// Whether Kosmos Download Manager is registered to launch at user sign-in.
 #[cfg(windows)]
 pub(crate) fn startup_enabled() -> bool {
     startup_enabled_in(RUN_KEY, VALUE_NAME)
@@ -329,10 +329,10 @@ mod tests {
     #[test]
     fn test_startup_registration_round_trip() {
         let key = format!(
-            r"HKCU\Software\KosmosDownloader\tests\{}",
+            r"HKCU\Software\KosmosDownloadManager\tests\{}",
             std::process::id()
         );
-        let value_name = "Kosmos Downloader Test";
+        let value_name = "Kosmos Download Manager Test";
         let executable = std::env::current_exe().expect("test executable path");
         let value = startup_value(&executable);
 
@@ -348,6 +348,6 @@ mod tests {
         set_startup_in(&key, value_name, None).expect("repeat disable is idempotent");
 
         // Best-effort cleanup of the throwaway parent key; the value under test is already gone.
-        let _ = reg(&["delete", r"HKCU\Software\KosmosDownloader", "/f"]);
+        let _ = reg(&["delete", r"HKCU\Software\KosmosDownloadManager", "/f"]);
     }
 }

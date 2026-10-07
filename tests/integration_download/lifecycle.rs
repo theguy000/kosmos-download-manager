@@ -5,7 +5,7 @@ use crate::support::http::{
 use crate::support::mock_server::{
     start_mock_server, start_mock_server_with_head_delay, start_non_range_mock_server,
 };
-use kosmos_downloader::engine::{
+use kosmos_download_manager::engine::{
     DownloadAction, DownloadEngine, DownloadSnapshot, DownloadStatus, DuplicateChoice,
 };
 use std::path::PathBuf;

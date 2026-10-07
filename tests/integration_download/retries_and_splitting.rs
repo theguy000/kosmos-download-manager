@@ -7,7 +7,7 @@ use crate::support::fixtures::{
 };
 use crate::support::retry_server::{RecoveryFault, RetryBehavior, start_retry_server};
 use crate::support::split_server::start_dynamic_split_server;
-use kosmos_downloader::engine::{DownloadAction, DownloadEngine, DownloadStatus};
+use kosmos_download_manager::engine::{DownloadAction, DownloadEngine, DownloadStatus};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 

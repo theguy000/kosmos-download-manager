@@ -1,9 +1,11 @@
-use kosmos_downloader::host::ipc::{read_framed_json, write_framed_json};
-use kosmos_downloader::host::protocol::{
+use kosmos_download_manager::host::ipc::{read_framed_json, write_framed_json};
+use kosmos_download_manager::host::protocol::{
     HostMessage, HostResponse, MAX_MESSAGE_BYTES, read_native_json, read_native_message,
     write_native_json, write_native_message,
 };
-use kosmos_downloader::host::registry::{HOST_NAME, default_allowed_origins, generate_manifest};
+use kosmos_download_manager::host::registry::{
+    HOST_NAME, default_allowed_origins, generate_manifest,
+};
 use std::io::Cursor;
 use std::path::Path;
 
@@ -67,7 +69,7 @@ fn test_native_messaging_json_messages() {
     // Test untagged direct download message without "action" key
     let untagged_payload = br#"{"url":"https://example.com/direct.tar.gz"}"#;
     let mut cursor = Cursor::new(untagged_payload);
-    let inbound: kosmos_downloader::host::InboundHostMessage =
+    let inbound: kosmos_download_manager::host::InboundHostMessage =
         serde_json::from_reader(&mut cursor).expect("parse untagged payload");
     let converted: HostMessage = inbound.into();
     assert!(
@@ -77,7 +79,7 @@ fn test_native_messaging_json_messages() {
 
 #[test]
 fn test_native_manifest_generation() {
-    let host_path = Path::new(r"C:\Program Files\Kosmos\kosmos-downloader.exe");
+    let host_path = Path::new(r"C:\Program Files\Kosmos\kosmos-download-manager.exe");
     let origins = default_allowed_origins(&["test_ext_id".to_string()]);
     let manifest = generate_manifest(host_path, &origins);
 
@@ -139,7 +141,7 @@ async fn test_ipc_end_to_end_messaging() {
 #[cfg(windows)]
 #[tokio::test]
 async fn test_named_pipe_popup_trigger() {
-    use kosmos_downloader::host::ipc::{send_ipc_message_to_pipe, start_ipc_server_on_pipe};
+    use kosmos_download_manager::host::ipc::{send_ipc_message_to_pipe, start_ipc_server_on_pipe};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 

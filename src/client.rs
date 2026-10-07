@@ -40,7 +40,7 @@ impl HttpClient {
             .http1_only()
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::limited(10))
-            .user_agent("KosmosDownloader/1.0")
+            .user_agent("KDM/1.0")
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 

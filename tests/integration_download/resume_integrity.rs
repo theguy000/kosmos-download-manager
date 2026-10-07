@@ -7,7 +7,7 @@ use crate::support::fixtures::{
 };
 use crate::support::http::TestRange;
 use crate::support::resume_server::start_no_etag_resume_server;
-use kosmos_downloader::engine::{DownloadAction, DownloadEngine, DownloadStatus};
+use kosmos_download_manager::engine::{DownloadAction, DownloadEngine, DownloadStatus};
 use std::time::Duration;
 
 #[tokio::test]

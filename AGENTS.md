@@ -1,6 +1,6 @@
-# Agent Instructions: Kosmos Downloader
+# Agent Instructions: Kosmos Download Manager
 
-**Kosmos Downloader** is an Internet Download Manager (IDM) desktop application built with Rust 2024, Slint, Tokio, and Reqwest.
+**Kosmos Download Manager** is an Internet Download Manager (IDM) desktop application built with Rust 2024, Slint, Tokio, and Reqwest.
 
 ## Core Directives for Agents
 

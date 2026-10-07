@@ -11,7 +11,7 @@ pub use registry::{HOST_NAME, default_allowed_origins, register_host};
 
 use std::path::PathBuf;
 
-/// Locates the `kosmos-downloader` main application executable.
+/// Locates the `kosmos-download-manager` main application executable.
 pub fn find_app_executable() -> std::io::Result<PathBuf> {
     let current_exe = std::env::current_exe()?;
     let dir = current_exe.parent().ok_or_else(|| {
@@ -19,9 +19,9 @@ pub fn find_app_executable() -> std::io::Result<PathBuf> {
     })?;
 
     let candidate_names = if cfg!(windows) {
-        ["kosmos-downloader.exe"]
+        ["kosmos-download-manager.exe", "kosmos-downloader.exe"]
     } else {
-        ["kosmos-downloader"]
+        ["kosmos-download-manager", "kosmos-downloader"]
     };
 
     for name in candidate_names {
@@ -35,7 +35,7 @@ pub fn find_app_executable() -> std::io::Result<PathBuf> {
 }
 
 /// Dispatches a message received from the browser extension.
-/// Either routes it to the running Kosmos Downloader GUI via IPC,
+/// Either routes it to the running Kosmos Download Manager GUI via IPC,
 /// or launches the application if it is not currently running.
 pub async fn handle_host_message(message: HostMessage) -> HostResponse {
     crate::platform::allow_foreground_activation();

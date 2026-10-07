@@ -1,6 +1,8 @@
 use crate::support::fixtures::{generate_test_payload, wait_for_snapshot};
 use crate::support::mock_server::start_mock_server;
-use kosmos_downloader::engine::{DownloadAction, DownloadEngine, DownloadStatus, DuplicateChoice};
+use kosmos_download_manager::engine::{
+    DownloadAction, DownloadEngine, DownloadStatus, DuplicateChoice,
+};
 use std::time::Duration;
 
 #[tokio::test]

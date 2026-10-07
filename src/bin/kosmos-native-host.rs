@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    kosmos_downloader::platform::allow_foreground_activation();
+    kosmos_download_manager::platform::allow_foreground_activation();
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--register" || a == "-r") {
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let exe = std::env::current_exe()?;
-        let path = kosmos_downloader::host::register_host(&exe, None, &extra_ids)?;
+        let path = kosmos_download_manager::host::register_host(&exe, None, &extra_ids)?;
         eprintln!("Registered native messaging host at: {}", path.display());
         return Ok(());
     }
@@ -26,6 +26,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(kosmos_downloader::host::run_native_messaging_host())?;
+    runtime.block_on(kosmos_download_manager::host::run_native_messaging_host())?;
     Ok(())
 }

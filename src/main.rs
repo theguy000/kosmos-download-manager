@@ -1,13 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use kosmos_downloader::engine::DownloadEngine;
-use kosmos_downloader::host::{
+use kosmos_download_manager::engine::DownloadEngine;
+use kosmos_download_manager::host::{
     HostMessage, register_host, run_native_messaging_host, send_ipc_message,
 };
-use kosmos_downloader::ui::run_app;
+use kosmos_download_manager::ui::run_app;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    kosmos_downloader::platform::allow_foreground_activation();
+    kosmos_download_manager::platform::allow_foreground_activation();
     let args: Vec<String> = std::env::args().collect();
 
     // 1. Native Messaging Host mode
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 2. Registration mode
-    // e.g. kosmos-downloader --register [--extension-id <id>]
+    // e.g. kosmos-download-manager --register [--extension-id <id>]
     if args.iter().any(|a| a == "--register" || a == "-r") {
         let mut extra_ids = Vec::new();
         let mut iter = args.iter().skip(1);

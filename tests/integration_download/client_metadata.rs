@@ -1,7 +1,7 @@
 use crate::support::fixtures::wait_for_snapshot;
 use crate::support::http::{is_head_request, start_local_server};
-use kosmos_downloader::client::{HttpClient, RemoteFileInfo};
-use kosmos_downloader::engine::{DownloadAction, DownloadEngine, DownloadStatus};
+use kosmos_download_manager::client::{HttpClient, RemoteFileInfo};
+use kosmos_download_manager::engine::{DownloadAction, DownloadEngine, DownloadStatus};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 

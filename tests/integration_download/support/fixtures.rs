@@ -1,4 +1,4 @@
-use kosmos_downloader::engine::DownloadSnapshot;
+use kosmos_download_manager::engine::DownloadSnapshot;
 use std::path::PathBuf;
 use std::time::Duration;
 

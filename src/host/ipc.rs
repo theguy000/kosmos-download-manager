@@ -3,14 +3,14 @@ use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[cfg(windows)]
-pub const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\kosmos_downloader_ipc";
+pub const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\kdm_ipc";
 
 #[cfg(not(windows))]
 pub fn default_socket_path() -> std::path::PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("kosmos_downloader_ipc.sock")
+        .join("kdm_ipc.sock")
 }
 
 pub async fn read_framed_json<R: AsyncRead + Unpin, T: serde::de::DeserializeOwned>(
@@ -149,7 +149,7 @@ where
 }
 
 fn log_stderr(msg: impl std::fmt::Display) {
-    eprintln!("[kosmos-ipc] {msg}");
+    eprintln!("[kdm-ipc] {msg}");
 }
 
 #[cfg(test)]
