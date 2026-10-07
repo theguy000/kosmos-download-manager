@@ -35,6 +35,14 @@ pub struct DuplicatePrompt {
     pub link_duplicate: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ChunkSnapshot {
+    pub id: usize,
+    pub downloaded: u64,
+    pub total: u64,
+    pub is_done: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DownloadSnapshot {
     pub session_id: u64,
@@ -49,6 +57,7 @@ pub struct DownloadSnapshot {
     pub resumable: bool,
     /// Set while the engine waits for a duplicate decision from the user.
     pub duplicate: Option<DuplicatePrompt>,
+    pub chunks: Vec<ChunkSnapshot>,
 }
 
 #[derive(Debug)]

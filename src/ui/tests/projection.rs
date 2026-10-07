@@ -1,7 +1,8 @@
 use super::support::install_test_platform;
+use crate::engine::ChunkSnapshot;
 use crate::settings::SaveSettings;
 use crate::ui::handlers::actions::send_action;
-use crate::ui::projection::{should_project_snapshot, update_window_state};
+use crate::ui::projection::{chunk_progress, should_project_snapshot, update_window_state};
 use crate::ui::view::MainWindow;
 
 #[test]
@@ -127,6 +128,100 @@ fn test_duplicate_prompt_projection_updates_window() -> Result<(), Box<dyn std::
     snap.downloaded_bytes = 4096;
     update_window_state(&ui, &SaveSettings::default(), &snap);
     assert_eq!(ui.get_active_size(), "4.0 KB");
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_snapshot_projection_updates_window() -> Result<(), Box<dyn std::error::Error>> {
+    use slint::Model;
+
+    let _ = install_test_platform()?;
+    let ui = MainWindow::new()?;
+
+    let snap = crate::engine::DownloadSnapshot {
+        session_id: 1,
+        url: "http://example.com/file.zip".into(),
+        filename: "file.zip".into(),
+        status: crate::engine::DownloadStatus::Downloading,
+        total_bytes: Some(4000),
+        downloaded_bytes: 2000,
+        chunks: vec![
+            crate::engine::ChunkSnapshot {
+                id: 0,
+                downloaded: 1000,
+                total: 2000,
+                is_done: false,
+            },
+            crate::engine::ChunkSnapshot {
+                id: 1,
+                downloaded: 2000,
+                total: 2000,
+                is_done: true,
+            },
+        ],
+        ..Default::default()
+    };
+
+    update_window_state(&ui, &SaveSettings::default(), &snap);
+    assert!(ui.get_is_downloading());
+
+    let chunks = ui.get_active_chunks();
+    assert_eq!(chunks.row_count(), 2);
+    let c0 = chunks.row_data(0).unwrap();
+    assert_eq!(c0.id, 0);
+    assert_eq!(c0.progress, 0.5);
+    assert!(!c0.is_done);
+
+    let c1 = chunks.row_data(1).unwrap();
+    assert_eq!(c1.id, 1);
+    assert_eq!(c1.progress, 1.0);
+    assert!(c1.is_done);
+
+    Ok(())
+}
+
+#[test]
+fn chunk_progress_handles_boundaries() {
+    let chunk = |downloaded, total, is_done| ChunkSnapshot {
+        id: 0,
+        downloaded,
+        total,
+        is_done,
+    };
+    assert_eq!(chunk_progress(&chunk(10, 0, false)), 0.0);
+    assert_eq!(chunk_progress(&chunk(300, 200, false)), 1.0);
+    assert_eq!(chunk_progress(&chunk(0, 200, true)), 1.0);
+    assert_eq!(chunk_progress(&chunk(50, 200, false)), 0.25);
+}
+
+#[test]
+fn chunk_projection_updates_in_place_and_clears() -> Result<(), Box<dyn std::error::Error>> {
+    use slint::Model;
+
+    let _ = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    let chunk = |downloaded| ChunkSnapshot {
+        id: 0,
+        downloaded,
+        total: 100,
+        is_done: false,
+    };
+    let mut snap = crate::engine::DownloadSnapshot {
+        chunks: vec![chunk(10), chunk(20)],
+        ..Default::default()
+    };
+    update_window_state(&ui, &SaveSettings::default(), &snap);
+    let model = ui.get_active_chunks();
+
+    snap.chunks = vec![chunk(50), chunk(20)];
+    update_window_state(&ui, &SaveSettings::default(), &snap);
+    assert_eq!(model.row_data(0).map(|c| c.progress), Some(0.5));
+    assert_eq!(ui.get_active_chunks().row_count(), 2);
+
+    snap.chunks.clear();
+    update_window_state(&ui, &SaveSettings::default(), &snap);
+    assert_eq!(ui.get_active_chunks().row_count(), 0);
 
     Ok(())
 }

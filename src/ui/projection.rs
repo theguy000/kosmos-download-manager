@@ -1,9 +1,9 @@
 use super::format::{format_bytes, format_eta, format_speed};
-use super::view::{MainWindow, Navigation, Palette};
-use crate::engine::{DownloadSnapshot, DownloadStatus};
+use super::view::{ChunkVisual, MainWindow, Navigation, Palette};
+use crate::engine::{ChunkSnapshot, DownloadSnapshot, DownloadStatus};
 use crate::history::{HistoryEntry, downloaded_label, now_unix_ms};
 use crate::settings::SaveSettings;
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::watch;
 
 pub(super) fn should_project_snapshot<T>(snapshot: &watch::Ref<'_, T>, initial: &mut bool) -> bool {
@@ -149,6 +149,8 @@ pub(super) fn update_window_state(
     window.set_active_size(size_str.into());
     window.set_active_time_left(format_eta(snap.eta_seconds).into());
 
+    project_chunks(window, &snap.chunks);
+
     if let Some(ref prompt) = snap.duplicate {
         if !window.get_show_duplicate_dialog() {
             window.set_duplicate_selected_option(0);
@@ -228,5 +230,38 @@ fn finished_download(id: i32, snap: &DownloadSnapshot) -> HistoryEntry {
         save_path: snap.save_path.clone(),
         total_bytes: snap.total_bytes.unwrap_or(snap.downloaded_bytes),
         completed_unix_ms: now_unix_ms(),
+    }
+}
+
+pub(super) fn chunk_progress(chunk: &ChunkSnapshot) -> f32 {
+    if chunk.is_done {
+        1.0
+    } else if chunk.total > 0 {
+        (chunk.downloaded as f32 / chunk.total as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+/// Updates the chunk model in place so Slint only redraws rows that changed.
+fn project_chunks(window: &MainWindow, chunks: &[ChunkSnapshot]) {
+    let visuals = chunks.iter().map(|c| ChunkVisual {
+        id: i32::try_from(c.id).unwrap_or(i32::MAX),
+        progress: chunk_progress(c),
+        is_done: c.is_done,
+    });
+    let model = window.get_active_chunks();
+    let Some(vec_model) = model.as_any().downcast_ref::<VecModel<ChunkVisual>>() else {
+        window.set_active_chunks(ModelRc::new(VecModel::from_iter(visuals)));
+        return;
+    };
+    if vec_model.row_count() != chunks.len() {
+        vec_model.set_vec(visuals.collect::<Vec<_>>());
+        return;
+    }
+    for (row, visual) in visuals.enumerate() {
+        if vec_model.row_data(row).as_ref() != Some(&visual) {
+            vec_model.set_row_data(row, visual);
+        }
     }
 }

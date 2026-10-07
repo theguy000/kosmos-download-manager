@@ -5,7 +5,7 @@ import "../fonts/InterVariable.ttf";
 import { AddDownloadDialog } from "add_download_dialog.slint";
 import { ComboItem } from "controls.slint";
 import { DeleteConfirmationDialog } from "delete_confirmation_dialog.slint";
-import { DownloadTable, TableItem } from "download_table.slint";
+import { DownloadTable, TableItem, ChunkVisual } from "download_table.slint";
 import { DuplicateDownloadDialog } from "duplicate_dialog.slint";
 import { ErrorDialog } from "error_dialog.slint";
 import { Navigation } from "navigation.slint";
@@ -57,6 +57,7 @@ export component MainWindow inherits Window {
 
     in-out property <bool> has_active_download: false;
     in-out property <bool> is_downloading: false;
+    in-out property <[ChunkVisual]> active_chunks: [];
     in-out property <bool> is_paused: false;
     in-out property <bool> is_completed: false;
     in-out property <bool> is_resumable: false;
@@ -197,6 +198,8 @@ export component MainWindow inherits Window {
                 col-date-added-width <=> root.col_date_added_width;
                 save-column-widths => { root.save_column_widths(); }
                 active-row-visible: root.active_row_visible;
+                is-downloading: root.is_downloading;
+                active-chunks: root.active_chunks;
                 selected-row <=> root.selected_row;
                 expanded-row <=> root.expanded_row;
                 is-completed: root.is_completed;

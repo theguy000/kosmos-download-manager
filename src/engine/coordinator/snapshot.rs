@@ -1,6 +1,6 @@
 use super::scheduler::rebalance_workers;
 use super::{Session, calculate_downloaded, uses_range_workers};
-use crate::engine::model::{DownloadSnapshot, DownloadStatus};
+use crate::engine::model::{ChunkSnapshot, DownloadSnapshot, DownloadStatus};
 use std::time::Instant;
 
 impl Session {
@@ -81,6 +81,29 @@ impl Session {
         eta_seconds: Option<u64>,
         resumable: bool,
     ) {
+        let mut ordered: Vec<(u64, ChunkSnapshot)> = self
+            .active_chunks
+            .iter()
+            .map(|chunk| {
+                // A zero-size range means a single stream of unknown length;
+                // fall back to the overall size (0 when still unknown).
+                let size = chunk.range.size();
+                let total = if size > 0 {
+                    size
+                } else {
+                    total_bytes.unwrap_or(0)
+                };
+                let snap = ChunkSnapshot {
+                    id: chunk.range.id,
+                    downloaded: chunk.downloaded,
+                    total,
+                    is_done: chunk.is_done,
+                };
+                (chunk.range.start, snap)
+            })
+            .collect();
+        ordered.sort_unstable_by_key(|(start, _)| *start);
+        let chunks = ordered.into_iter().map(|(_, snap)| snap).collect();
         let snapshot = DownloadSnapshot {
             session_id: self.session_id,
             url: self.current_url.clone(),
@@ -96,6 +119,7 @@ impl Session {
                 .duplicate
                 .as_ref()
                 .map(|pending| pending.prompt.clone()),
+            chunks,
         };
         let _ = self.snapshot_tx.send(snapshot);
     }

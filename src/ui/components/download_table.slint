@@ -18,6 +18,12 @@ export struct TableItem {
     size_bytes: float,
 }
 
+export struct ChunkVisual {
+    id: int,
+    progress: float,
+    is_done: bool,
+}
+
 component ColumnResizer inherits Rectangle {
     in-out property <length> column-width: 0px;
     in property <length> min-column-width: 50px;
@@ -62,28 +68,27 @@ component RowInfoButton inherits Rectangle {
     x: root.is_expanded ? 0px : -26px;
     y: 0px;
     width: 26px;
-    height: root.is_expanded ? 52px : 25px;
-    animate x, opacity, height { duration: 200ms; easing: ease-out; }
+    animate x { duration: 200ms; easing: ease-out; }
     background: root.is_expanded
         ? Palette.control-active
         : (info_touch.pressed ? Palette.selection-pressed : (info_touch.has-hover ? Palette.surface-alt : Palette.surface));
 
     // Right divider line separating the info column cell from the file columns
     Rectangle {
-        x: parent.width - 1px;
+        x: root.width - 1px;
         width: 1px;
-        height: parent.height;
+        height: root.height;
         background: Palette.border;
     }
 
     IconInfo {
-        x: 6.5px;
-        y: 6px;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
         stroke-color: root.is_expanded || info_touch.has-hover ? Palette.accent-text : Palette.accent;
     }
 
     info_touch := TouchArea {
-        enabled: root.opacity > 0.5;
+        enabled: root.is_expanded;
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
     }
@@ -256,6 +261,8 @@ component HeaderCell inherits Rectangle {
 
 export component DownloadTable inherits ScrollView {
     in property <bool> active_row_visible: false;
+    in property <bool> is_downloading: false;
+    in property <[ChunkVisual]> active_chunks: [];
     in-out property <int> selected_row: 0;
     in-out property <int> expanded_row: -1;
     in property <bool> is_completed: false;
@@ -415,8 +422,9 @@ export component DownloadTable inherits ScrollView {
             if root.active_row_visible: Rectangle {
                 property <bool> is_selected: root.selected_row == 0;
                 property <bool> is_expanded: self.is_selected && root.expanded_row == 0;
+                property <bool> can_expand_bottom: root.is_downloading && self.is_expanded;
                 clip: true;
-                height: self.is_expanded ? 52px : 25px;
+                height: self.can_expand_bottom ? 52px : 25px;
                 animate height { duration: 200ms; easing: ease-out; }
                 background: self.is_selected ? Palette.selection : (act_t.has-hover ? Palette.surface-alt : Palette.background);
                 border-width: list_focus.has-focus && root.keyboard_focused && self.is_selected ? 1px : 0px;
@@ -446,24 +454,45 @@ export component DownloadTable inherits ScrollView {
                     col-date-added-width: root.col_date_added_width;
                 }
 
-                if self.is_expanded: Rectangle {
+                // Divider line between file columns above and chunk visualizer below
+                if self.can_expand_bottom: Rectangle {
+                    x: parent.is_expanded ? 26px : 0px;
                     y: 25px;
+                    width: parent.width - self.x;
+                    height: 1px;
+                    background: Palette.border;
+                }
+
+                if self.can_expand_bottom: Rectangle {
+                    y: 31px;
                     x: parent.is_expanded ? 34px : 8px;
                     animate x { duration: 200ms; easing: ease-out; }
                     width: root.col_filename_width - 16px;
-                    height: 12px;
+                    height: 14px;
                     background: Palette.surface-sunken;
                     border-width: 1px;
                     border-color: Palette.border;
 
-                    // ponytail: placeholder chunk progress bar; replace with dynamic chunk ranges once coordinator stream events are piped.
-                    HorizontalLayout {
+                    if root.active_chunks.length > 0: HorizontalLayout {
                         padding: 1px;
-                        spacing: 1px;
-                        Rectangle { width: 35%; background: Palette.accent; }
-                        Rectangle { width: 15%; background: Palette.surface-alt; }
-                        Rectangle { width: 30%; background: Palette.accent; }
-                        Rectangle { width: 20%; background: Palette.surface-alt; }
+                        spacing: 2px;
+                        for chunk[c_idx] in root.active_chunks: Rectangle {
+                            horizontal-stretch: 1;
+                            background: Palette.surface-alt;
+                            clip: true;
+
+                            Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width * (chunk.progress);
+                                height: parent.height;
+                                background: Palette.accent;
+                            }
+                        }
+                    }
+
+                    if root.active_chunks.length == 0: Rectangle {
+                        background: Palette.surface-alt;
                     }
                 }
 
@@ -481,6 +510,7 @@ export component DownloadTable inherits ScrollView {
                 }
 
                 RowInfoButton {
+                    height: parent.height;
                     is-selected: parent.is_selected;
                     is-expanded: parent.is_expanded;
                     clicked => {
@@ -501,8 +531,7 @@ export component DownloadTable inherits ScrollView {
                     || (!root.active_row_visible && root.selected_row <= 0 && idx == 0));
 
                 clip: true;
-                height: self.is_visible ? (self.is_expanded ? 52px : 25px) : 0px;
-                animate height { duration: 200ms; easing: ease-out; }
+                height: self.is_visible ? 25px : 0px;
                 background: self.is_selected ? Palette.selection : (s_touch.has-hover ? Palette.surface-alt : (Math.mod(idx, 2) == 0 ? Palette.surface-sunken : Palette.background));
                 border-width: self.is_focused ? 1px : 0px;
                 border-color: FocusStyle.ring;
@@ -545,6 +574,7 @@ export component DownloadTable inherits ScrollView {
                 if self.is_visible: Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
 
                 if self.is_visible: RowInfoButton {
+                    height: parent.height;
                     is-selected: parent.is_selected;
                     is-expanded: parent.is_expanded;
                     clicked => {
