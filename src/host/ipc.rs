@@ -8,8 +8,7 @@ pub const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\kdm_ipc";
 #[cfg(not(windows))]
 pub fn default_socket_path() -> std::path::PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
+        .map_or_else(std::env::temp_dir, std::path::PathBuf::from)
         .join("kdm_ipc.sock")
 }
 
@@ -88,7 +87,7 @@ where
         server = match ServerOptions::new().create(pipe_name) {
             Ok(next) => next,
             Err(e) => {
-                log_stderr(format!("Failed to create subsequent pipe instance: {e}"));
+                eprintln!("[kdm-ipc] Failed to create subsequent pipe instance: {e}");
                 break;
             }
         };
@@ -146,10 +145,6 @@ where
             }
         });
     }
-}
-
-fn log_stderr(msg: impl std::fmt::Display) {
-    eprintln!("[kdm-ipc] {msg}");
 }
 
 #[cfg(test)]
@@ -221,5 +216,42 @@ mod tests {
         );
 
         server_task.abort();
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_default_socket_path() {
+        let path = default_socket_path();
+        assert!(path.ends_with("kdm_ipc.sock"));
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn test_unix_socket_ipc() {
+        let test_socket_path =
+            std::env::temp_dir().join(format!("kosmos_test_socket_{}.sock", std::process::id()));
+        let _ = std::fs::remove_file(&test_socket_path);
+        let path_clone = test_socket_path.clone();
+
+        let server_task = tokio::spawn(async move {
+            let listener = tokio::net::UnixListener::bind(&path_clone).unwrap();
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let msg: HostMessage = read_framed_json(&mut stream).await.unwrap();
+            if msg == HostMessage::Ping {
+                let resp = HostResponse::ok_with_message("pong");
+                write_framed_json(&mut stream, &resp).await.unwrap();
+            }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let ping_resp = send_ipc_message_to_path(&test_socket_path, &HostMessage::Ping)
+            .await
+            .expect("send ping");
+        assert_eq!(ping_resp.status, "ok");
+        assert_eq!(ping_resp.message.as_deref(), Some("pong"));
+
+        server_task.abort();
+        let _ = std::fs::remove_file(&test_socket_path);
     }
 }
