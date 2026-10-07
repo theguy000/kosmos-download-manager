@@ -846,28 +846,37 @@ fn test_toggle_kdm_folder() -> Result<(), Box<dyn std::error::Error>> {
     let (_window, _clipboard) = install_test_platform()?;
     let ui = MainWindow::new()?;
 
-    set_option_dir(&ui, 0, "D:\\Downloads");
-    set_option_dir(&ui, 1, "D:\\Downloads\\Compressed");
-    set_option_dir(&ui, 2, "D:\\Downloads\\Documents");
-    set_option_dir(&ui, 3, "E:\\CustomMusic");
+    let base = PathBuf::from("downloads");
+    let compressed_def = SaveSettings::default_subfolder(&base, Category::Compressed);
+    let documents_def = SaveSettings::default_subfolder(&base, Category::Documents);
+    let custom_dir = PathBuf::from("custom").join("music");
+
+    set_option_dir(&ui, 0, &base.to_string_lossy());
+    set_option_dir(&ui, 1, &compressed_def.to_string_lossy());
+    set_option_dir(&ui, 2, &documents_def.to_string_lossy());
+    set_option_dir(&ui, 3, &custom_dir.to_string_lossy());
 
     // Enable KDM folder
     toggle_kdm_folder(&ui, true);
-    assert_eq!(option_dir(&ui, 0), "D:\\Downloads\\KDM");
-    assert_eq!(option_dir(&ui, 1), "D:\\Downloads\\KDM\\Compressed");
-    assert_eq!(option_dir(&ui, 2), "D:\\Downloads\\KDM\\Documents");
+    let kdm_base = SaveSettings::apply_kdm_folder(&base, true);
+    let kdm_compressed = SaveSettings::default_subfolder(&kdm_base, Category::Compressed);
+    let kdm_documents = SaveSettings::default_subfolder(&kdm_base, Category::Documents);
+
+    assert_eq!(option_dir(&ui, 0), kdm_base.to_string_lossy());
+    assert_eq!(option_dir(&ui, 1), kdm_compressed.to_string_lossy());
+    assert_eq!(option_dir(&ui, 2), kdm_documents.to_string_lossy());
     assert_eq!(
         option_dir(&ui, 3),
-        "E:\\CustomMusic",
+        custom_dir.to_string_lossy(),
         "Custom directory stays untouched"
     );
 
     // Disable KDM folder
     toggle_kdm_folder(&ui, false);
-    assert_eq!(option_dir(&ui, 0), "D:\\Downloads");
-    assert_eq!(option_dir(&ui, 1), "D:\\Downloads\\Compressed");
-    assert_eq!(option_dir(&ui, 2), "D:\\Downloads\\Documents");
-    assert_eq!(option_dir(&ui, 3), "E:\\CustomMusic");
+    assert_eq!(option_dir(&ui, 0), base.to_string_lossy());
+    assert_eq!(option_dir(&ui, 1), compressed_def.to_string_lossy());
+    assert_eq!(option_dir(&ui, 2), documents_def.to_string_lossy());
+    assert_eq!(option_dir(&ui, 3), custom_dir.to_string_lossy());
 
     Ok(())
 }
