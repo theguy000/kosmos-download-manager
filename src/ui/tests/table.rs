@@ -257,3 +257,31 @@ fn completed_download_persists_immediately_without_next_session() {
     assert_eq!(reloaded.entries().len(), 1);
     assert_eq!(reloaded.entries()[0].filename, "testfile.iso");
 }
+
+#[test]
+fn test_row_expanded_toggle() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = install_test_platform()?;
+    let ui = MainWindow::new()?;
+
+    assert_eq!(ui.get_expanded_row(), -1);
+    ui.set_expanded_row(1);
+    assert_eq!(ui.get_expanded_row(), 1);
+    ui.set_expanded_row(-1);
+    assert_eq!(ui.get_expanded_row(), -1);
+
+    Ok(())
+}
+
+#[test]
+fn test_row_expanded_resets_on_step_selection() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = install_test_platform()?;
+    let ui = MainWindow::new()?;
+
+    ui.set_has_active_download(true);
+    ui.set_expanded_row(1);
+    assert_eq!(ui.get_expanded_row(), 1);
+    crate::ui::handlers::table::step_selection(&ui, 1);
+    assert_eq!(ui.get_expanded_row(), -1);
+
+    Ok(())
+}

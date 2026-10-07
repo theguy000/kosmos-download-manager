@@ -50,6 +50,7 @@ export component MainWindow inherits Window {
     in-out property <bool> delete_file: false;
     in-out property <int> selected_category: 0;
     in-out property <int> selected_row: 0;
+    in-out property <int> expanded_row: -1;
     in-out property <bool> all_downloads_expanded: true;
     in-out property <bool> sidebar_collapsed: false;
     in property <[Subcategory]> sidebar_subcategories: [];
@@ -197,6 +198,7 @@ export component MainWindow inherits Window {
                 save-column-widths => { root.save_column_widths(); }
                 active-row-visible: root.active_row_visible;
                 selected-row <=> root.selected_row;
+                expanded-row <=> root.expanded_row;
                 is-completed: root.is_completed;
                 active-filename: root.active_filename;
                 active-file-type: root.active_file_type;

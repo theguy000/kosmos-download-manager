@@ -1,7 +1,7 @@
 import { Palette } from "theme.slint";
 import { FocusStyle } from "controls.slint";
 import { Navigation } from "navigation.slint";
-import { FileTypeIcon } from "icons.slint";
+import { FileTypeIcon, IconInfo } from "icons.slint";
 import { ScrollView } from "std-widgets.slint";
 
 export struct TableItem {
@@ -54,6 +54,41 @@ component ColumnResizer inherits Rectangle {
     }
 }
 
+component RowInfoButton inherits Rectangle {
+    in property <bool> is_selected: false;
+    in property <bool> is_expanded: false;
+    callback clicked();
+
+    x: root.is_expanded ? 0px : -26px;
+    y: 0px;
+    width: 26px;
+    height: root.is_expanded ? 52px : 25px;
+    animate x, opacity, height { duration: 200ms; easing: ease-out; }
+    background: root.is_expanded
+        ? Palette.control-active
+        : (info_touch.pressed ? Palette.selection-pressed : (info_touch.has-hover ? Palette.surface-alt : Palette.surface));
+
+    // Right divider line separating the info column cell from the file columns
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: parent.height;
+        background: Palette.border;
+    }
+
+    IconInfo {
+        x: 6.5px;
+        y: 6px;
+        stroke-color: root.is_expanded || info_touch.has-hover ? Palette.accent-text : Palette.accent;
+    }
+
+    info_touch := TouchArea {
+        enabled: root.opacity > 0.5;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 component DownloadRowColumns inherits HorizontalLayout {
     in property <string> filename;
     in property <string> file_type;
@@ -72,6 +107,7 @@ component DownloadRowColumns inherits HorizontalLayout {
     in property <length> col_transfer_rate_width;
     in property <length> col_date_added_width;
 
+    height: 25px;
     alignment: start;
     padding-left: 8px;
     padding-right: 8px;
@@ -221,6 +257,7 @@ component HeaderCell inherits Rectangle {
 export component DownloadTable inherits ScrollView {
     in property <bool> active_row_visible: false;
     in-out property <int> selected_row: 0;
+    in-out property <int> expanded_row: -1;
     in property <bool> is_completed: false;
     in property <string> active_filename: "";
     in property <string> active_file_type: "doc";
@@ -376,15 +413,22 @@ export component DownloadTable inherits ScrollView {
             spacing: 0px;
 
             if root.active_row_visible: Rectangle {
-                height: 25px;
-                background: root.selected_row == 0 ? Palette.selection : (act_t.has-hover ? Palette.surface-alt : Palette.background);
-                border-width: list_focus.has-focus && root.keyboard_focused && root.selected_row == 0 ? 1px : 0px;
+                property <bool> is_selected: root.selected_row == 0;
+                property <bool> is_expanded: self.is_selected && root.expanded_row == 0;
+                clip: true;
+                height: self.is_expanded ? 52px : 25px;
+                animate height { duration: 200ms; easing: ease-out; }
+                background: self.is_selected ? Palette.selection : (act_t.has-hover ? Palette.surface-alt : Palette.background);
+                border-width: list_focus.has-focus && root.keyboard_focused && self.is_selected ? 1px : 0px;
                 border-color: FocusStyle.ring;
                 accessible-role: button;
                 accessible-label: root.active_filename + ", " + root.active_status;
                 accessible-action-default => { root.selected_row = 0; root.row_selected(0); }
 
                 DownloadRowColumns {
+                    y: 0px;
+                    x: parent.is_expanded ? 26px : 0px;
+                    animate x { duration: 200ms; easing: ease-out; }
                     filename: root.active_filename != "" ? root.active_filename : "New Download";
                     file-type: root.active_file_type;
                     size-text: root.active_size;
@@ -401,30 +445,65 @@ export component DownloadTable inherits ScrollView {
                     col-transfer-rate-width: root.col_transfer_rate_width;
                     col-date-added-width: root.col_date_added_width;
                 }
+
+                if self.is_expanded: Rectangle {
+                    y: 25px;
+                    x: parent.is_expanded ? 34px : 8px;
+                    animate x { duration: 200ms; easing: ease-out; }
+                    width: root.col_filename_width - 16px;
+                    height: 12px;
+                    background: Palette.surface-sunken;
+                    border-width: 1px;
+                    border-color: Palette.border;
+
+                    // ponytail: placeholder chunk progress bar; replace with dynamic chunk ranges once coordinator stream events are piped.
+                    HorizontalLayout {
+                        padding: 1px;
+                        spacing: 1px;
+                        Rectangle { width: 35%; background: Palette.accent; }
+                        Rectangle { width: 15%; background: Palette.surface-alt; }
+                        Rectangle { width: 30%; background: Palette.accent; }
+                        Rectangle { width: 20%; background: Palette.surface-alt; }
+                    }
+                }
+
                 Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
                 act_t := TouchArea {
                     mouse-cursor: pointer;
                     clicked => {
                         root.keyboard_focused = false;
                         list_focus.focus();
+                        root.expanded_row = (root.expanded_row == 0) ? -1 : 0;
                         root.selected_row = 0;
                         root.row_selected(0);
                     }
                     double-clicked => { if root.is_completed { root.open_file(); } }
+                }
+
+                RowInfoButton {
+                    is-selected: parent.is_selected;
+                    is-expanded: parent.is_expanded;
+                    clicked => {
+                        root.expanded_row = (root.expanded_row == 0) ? -1 : 0;
+                    }
                 }
             }
 
             for item[idx] in root.sample_downloads: Rectangle {
                 property <bool> is_visible: Navigation.category_matches(
                     root.selected_category, item.category_id, true);
+                property <bool> is_selected: root.selected_row == item.id;
+                property <bool> is_expanded: self.is_selected && root.expanded_row == item.id;
                 // The keyboard marks the selected row, or the first listed row when the table
                 // has no selection yet. A click selects the row without painting the ring.
                 property <bool> is_focused: list_focus.has-focus && root.keyboard_focused
-                    && (root.selected_row == item.id
+                    && (self.is_selected
                     || (!root.active_row_visible && root.selected_row <= 0 && idx == 0));
 
-                height: self.is_visible ? 25px : 0px;
-                background: root.selected_row == item.id ? Palette.selection : (s_touch.has-hover ? Palette.surface-alt : (Math.mod(idx, 2) == 0 ? Palette.surface-sunken : Palette.background));
+                clip: true;
+                height: self.is_visible ? (self.is_expanded ? 52px : 25px) : 0px;
+                animate height { duration: 200ms; easing: ease-out; }
+                background: self.is_selected ? Palette.selection : (s_touch.has-hover ? Palette.surface-alt : (Math.mod(idx, 2) == 0 ? Palette.surface-sunken : Palette.background));
                 border-width: self.is_focused ? 1px : 0px;
                 border-color: FocusStyle.ring;
                 accessible-role: button;
@@ -437,6 +516,7 @@ export component DownloadTable inherits ScrollView {
                     clicked => {
                         root.keyboard_focused = false;
                         list_focus.focus();
+                        root.expanded_row = (root.selected_row == item.id && root.expanded_row == item.id) ? -1 : item.id;
                         root.selected_row = item.id;
                         root.row_selected(item.id);
                     }
@@ -444,6 +524,9 @@ export component DownloadTable inherits ScrollView {
                 }
 
                 if self.is_visible: DownloadRowColumns {
+                    y: 0px;
+                    x: parent.is_expanded ? 26px : 0px;
+                    animate x { duration: 200ms; easing: ease-out; }
                     filename: item.filename;
                     file-type: item.file_type;
                     size-text: item.size_text;
@@ -458,7 +541,16 @@ export component DownloadTable inherits ScrollView {
                     col-transfer-rate-width: root.col_transfer_rate_width;
                     col-date-added-width: root.col_date_added_width;
                 }
+
                 if self.is_visible: Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
+
+                if self.is_visible: RowInfoButton {
+                    is-selected: parent.is_selected;
+                    is-expanded: parent.is_expanded;
+                    clicked => {
+                        root.expanded_row = (root.expanded_row == item.id) ? -1 : item.id;
+                    }
+                }
             }
         }
 

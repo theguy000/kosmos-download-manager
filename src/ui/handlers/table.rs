@@ -54,6 +54,7 @@ pub(crate) fn step_selection(window: &MainWindow, step: i32) {
     };
     let id = ids[next];
     window.set_selected_row(id);
+    window.set_expanded_row(-1);
     update_selection_state(window, id);
 }
 
@@ -103,6 +104,7 @@ pub(crate) fn bind_table_handlers(window: &MainWindow, state: &AppState) {
         let window_weak = window.as_weak();
         window.on_selected_category_changed(move || {
             if let Some(window) = window_weak.upgrade() {
+                window.set_expanded_row(-1);
                 update_selection_state(&window, window.get_selected_row());
             }
         });
