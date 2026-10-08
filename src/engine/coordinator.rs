@@ -6,6 +6,7 @@ mod progress;
 mod resume;
 mod scheduler;
 mod snapshot;
+mod speed;
 #[cfg(test)]
 mod tests;
 
@@ -16,6 +17,7 @@ use crate::storage::{Storage, StorageError};
 use duplicate::PendingDuplicate;
 use metadata::FetchInfoMsg;
 use scheduler::{ActiveChunk, MAX_CHUNK_RETRIES};
+use speed::SpeedMeter;
 use std::cell::LazyCell;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -104,6 +106,7 @@ struct Session {
     last_tick: Instant,
     bytes_since_last_tick: u64,
     current_speed: u64,
+    meter: SpeedMeter,
 }
 
 impl Session {
@@ -141,6 +144,7 @@ impl Session {
             last_tick: Instant::now(),
             bytes_since_last_tick: 0,
             current_speed: 0,
+            meter: SpeedMeter::default(),
         }
     }
 }

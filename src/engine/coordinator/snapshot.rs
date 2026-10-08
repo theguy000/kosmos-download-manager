@@ -37,29 +37,17 @@ impl Session {
             self.last_tick = now;
 
             if elapsed > 0.05 {
-                let instant_speed = (self.bytes_since_last_tick as f64 / elapsed) as u64;
+                self.meter.record(now, self.bytes_since_last_tick);
                 self.bytes_since_last_tick = 0;
-
-                // Exponential moving average for smooth speed display
-                self.current_speed = if self.current_speed == 0 {
-                    instant_speed
-                } else {
-                    ((self.current_speed as f64 * 0.7) + (instant_speed as f64 * 0.3)) as u64
-                };
+                self.current_speed = self.meter.speed();
             }
 
             let downloaded = calculate_downloaded(&self.active_chunks);
             let total_bytes = self.file_info.as_ref().and_then(|i| i.content_length);
 
-            let eta_seconds = if let Some(total) = total_bytes {
-                if self.current_speed > 0 && total > downloaded {
-                    Some((total - downloaded) / self.current_speed)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let eta_seconds = total_bytes
+                .filter(|&total| total > downloaded)
+                .and_then(|total| (total - downloaded).checked_div(self.current_speed));
 
             let resumable = self.file_info.as_ref().is_some_and(uses_range_workers);
 
