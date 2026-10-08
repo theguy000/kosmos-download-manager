@@ -454,8 +454,8 @@ export component DownloadTable inherits ScrollView {
                     y: 33px;
                     x: parent.is_expanded ? 34px : 8px;
                     animate x { duration: 200ms; easing: ease-out; }
-                    width: root.col_filename_width - 16px;
-                    height: 10px;
+                    width: parent.width - self.x - 8px;
+                    height: 12px;
                     background: Palette.surface-sunken;
 
                     if root.active_chunks.length > 0: HorizontalLayout {
@@ -479,17 +479,6 @@ export component DownloadTable inherits ScrollView {
                     if root.active_chunks.length == 0: Rectangle {
                         background: Palette.surface-alt;
                     }
-                }
-
-                if self.can_expand_bottom && root.active_chunks.length > 0: Text {
-                    y: 33px;
-                    height: 10px;
-                    x: (parent.is_expanded ? 34px : 8px) + root.col_filename_width - 16px + 10px;
-                    animate x { duration: 200ms; easing: ease-out; }
-                    text: root.active_chunks.length == 1 ? "1 stream" : root.active_chunks.length + " streams";
-                    font-size: 11px;
-                    color: Palette.text-muted;
-                    vertical-alignment: center;
                 }
 
                 Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
