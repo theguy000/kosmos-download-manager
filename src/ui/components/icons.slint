@@ -53,10 +53,14 @@ export component IconOptions inherits Path {
 
 export component IconInfo inherits Path {
     in property <color> stroke-color: Palette.icon;
-    width: 13px; height: 13px;
-    commands: "M 6.5 1.5 A 5 5 0 1 1 6.5 11.5 A 5 5 0 1 1 6.5 1.5 Z M 6.5 3.75 L 6.5 4.5 M 6.5 6 L 6.5 9.5 M 5.5 6 L 6.5 6";
+    width: 14px; height: 14px;
+    // Fixed viewbox: without it the path is stretched to its own bounds and the stroke clips.
+    viewbox-width: 14; viewbox-height: 14;
+    // Circle with a plain dot and stem; no serif, so it stays crisp at small sizes.
+    commands: "M 7 1.25 A 5.75 5.75 0 1 1 7 12.75 A 5.75 5.75 0 1 1 7 1.25 Z M 7 4.1 L 7 4.6 M 7 6.4 L 7 10";
     stroke: root.stroke-color;
-    stroke-width: 1.2px;
+    stroke-width: 1.3px;
+    stroke-line-cap: round;
 }
 
 export component IconChevronDown inherits Path {

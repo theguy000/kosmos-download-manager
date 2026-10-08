@@ -69,22 +69,17 @@ component RowInfoButton inherits Rectangle {
     y: 0px;
     width: 26px;
     animate x { duration: 200ms; easing: ease-out; }
-    background: root.is_expanded
-        ? Palette.control-active
-        : (info_touch.pressed ? Palette.selection-pressed : (info_touch.has-hover ? Palette.surface-alt : Palette.surface));
-
-    // Right divider line separating the info column cell from the file columns
-    Rectangle {
-        x: root.width - 1px;
-        width: 1px;
-        height: root.height;
-        background: Palette.border;
-    }
+    // A surface step instead of an outline separates the info cell from the file columns.
+    background: info_touch.pressed ? Palette.control-pressed
+        : (info_touch.has-hover ? Palette.control-filled : Palette.control-active);
+    accessible-role: button;
+    accessible-label: "Hide details";
+    accessible-action-default => { root.clicked(); }
 
     IconInfo {
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
-        stroke-color: root.is_expanded || info_touch.has-hover ? Palette.accent-text : Palette.accent;
+        stroke-color: info_touch.has-hover ? Palette.accent-text : Palette.accent;
     }
 
     info_touch := TouchArea {
@@ -454,24 +449,14 @@ export component DownloadTable inherits ScrollView {
                     col-date-added-width: root.col_date_added_width;
                 }
 
-                // Divider line between file columns above and chunk visualizer below
+                // The chunk bar sits on a sunken surface, with no divider or outline above it.
                 if self.can_expand_bottom: Rectangle {
-                    x: parent.is_expanded ? 26px : 0px;
-                    y: 25px;
-                    width: parent.width - self.x;
-                    height: 1px;
-                    background: Palette.border;
-                }
-
-                if self.can_expand_bottom: Rectangle {
-                    y: 31px;
+                    y: 33px;
                     x: parent.is_expanded ? 34px : 8px;
                     animate x { duration: 200ms; easing: ease-out; }
                     width: root.col_filename_width - 16px;
-                    height: 14px;
+                    height: 10px;
                     background: Palette.surface-sunken;
-                    border-width: 1px;
-                    border-color: Palette.border;
 
                     if root.active_chunks.length > 0: HorizontalLayout {
                         padding: 1px;
@@ -486,7 +471,7 @@ export component DownloadTable inherits ScrollView {
                                 y: 0px;
                                 width: parent.width * (chunk.progress);
                                 height: parent.height;
-                                background: Palette.accent;
+                                background: chunk.is_done ? Palette.success : Palette.accent;
                             }
                         }
                     }
@@ -494,6 +479,17 @@ export component DownloadTable inherits ScrollView {
                     if root.active_chunks.length == 0: Rectangle {
                         background: Palette.surface-alt;
                     }
+                }
+
+                if self.can_expand_bottom && root.active_chunks.length > 0: Text {
+                    y: 33px;
+                    height: 10px;
+                    x: (parent.is_expanded ? 34px : 8px) + root.col_filename_width - 16px + 10px;
+                    animate x { duration: 200ms; easing: ease-out; }
+                    text: root.active_chunks.length == 1 ? "1 stream" : root.active_chunks.length + " streams";
+                    font-size: 11px;
+                    color: Palette.text-muted;
+                    vertical-alignment: center;
                 }
 
                 Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
