@@ -628,7 +628,7 @@ async fn test_premature_disconnect_fails_download() {
 
     let terminal = wait_for_snapshot(
         &mut snapshot_rx,
-        Duration::from_secs(2),
+        Duration::from_secs(10), // covers the 1s + 2s + 4s retry backoff
         "Engine should transition to Failed status on premature disconnect",
         |snap| {
             matches!(

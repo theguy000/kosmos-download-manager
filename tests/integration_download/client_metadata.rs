@@ -2,6 +2,8 @@ use crate::support::fixtures::wait_for_snapshot;
 use crate::support::http::{is_head_request, start_local_server};
 use kosmos_download_manager::client::{HttpClient, RemoteFileInfo};
 use kosmos_download_manager::engine::{DownloadAction, DownloadEngine, DownloadStatus};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
@@ -149,6 +151,58 @@ async fn test_server_ignores_range_returns_200() {
     let _ = std::fs::remove_file(&save_path);
 }
 
+#[tokio::test]
+async fn test_probe_retries_rate_limit_before_failing() {
+    // The first probe attempt (HEAD + ranged GET) is rate limited; the retry succeeds.
+    let served = Arc::new(AtomicUsize::new(0));
+    let addr = start_local_server(move |mut socket, request| {
+        let n = served.fetch_add(1, Ordering::SeqCst);
+        async move {
+            let resp = if n < 2 {
+                "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            } else if is_head_request(&request) {
+                "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n"
+            } else {
+                "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ndata"
+            };
+            let _ = socket.write_all(resp.as_bytes()).await;
+        }
+    })
+    .await;
+
+    let save_path =
+        std::env::temp_dir().join(format!("kosmos_429_test_{}.bin", std::process::id()));
+    let _ = std::fs::remove_file(&save_path);
+
+    let engine = DownloadEngine::new();
+    let action_tx = engine.action_tx();
+    let mut snapshot_rx = engine.snapshot_rx();
+
+    action_tx
+        .send(DownloadAction::Start {
+            url: format!("http://{addr}/limited.bin"),
+            save_path: save_path.clone(),
+            num_chunks: 2,
+        })
+        .await
+        .unwrap();
+
+    let terminal = wait_for_snapshot(
+        &mut snapshot_rx,
+        Duration::from_secs(5),
+        "429 on the first probe should be retried, not fail the download",
+        |snap| {
+            matches!(
+                snap.status,
+                DownloadStatus::Completed | DownloadStatus::Failed(_)
+            )
+        },
+    )
+    .await;
+    assert_eq!(terminal.status, DownloadStatus::Completed);
+    assert_eq!(std::fs::read(&save_path).unwrap(), b"data");
+    let _ = std::fs::remove_file(&save_path);
+}
 #[tokio::test]
 async fn test_probe_bad_http_status() {
     // Mock server returning 404

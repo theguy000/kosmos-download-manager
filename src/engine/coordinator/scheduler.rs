@@ -16,14 +16,22 @@ pub(super) struct ActiveChunk {
     pub(super) retry_requested: bool,
     pub(super) retries: u8,
     pub(super) last_progress: Instant,
+    /// A retried chunk is not respawned before this instant.
+    pub(super) not_before: Instant,
 }
 
 pub(super) const MIN_SPLIT_BYTES: u64 = 256 * 1024;
 pub(super) const MAX_CHUNK_RETRIES: u8 = 3;
 const STALL_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Backoff before retry number `retries` (0-based): 1s, 2s, 4s, capped at 32s.
+pub(super) fn retry_delay(retries: u8) -> Duration {
+    Duration::from_secs(1 << retries.min(5))
+}
+
 impl ActiveChunk {
     pub(super) fn new(range: ChunkRange) -> Self {
+        let now = Instant::now();
         Self {
             range,
             downloaded: 0,
@@ -32,12 +40,21 @@ impl ActiveChunk {
             split_requested: false,
             retry_requested: false,
             retries: 0,
-            last_progress: Instant::now(),
+            last_progress: now,
+            not_before: now,
         }
     }
 
     pub(super) fn can_retry(&self) -> bool {
         !self.is_done && self.downloaded < self.range.size() && self.retries < MAX_CHUNK_RETRIES
+    }
+
+    pub(super) fn schedule_retry(&mut self) {
+        self.not_before = Instant::now() + retry_delay(self.retries);
+        // No worker runs while waiting; keep the stall check from firing.
+        self.last_progress = self.not_before;
+        self.retries += 1;
+        self.yield_tx = None;
     }
 
     // pass borrowed session state rather than duplicating it in a worker context.
@@ -182,9 +199,10 @@ pub(super) fn rebalance_workers(
         }
     }
     worker_handles.retain(|handle| !handle.is_finished());
+    let now = Instant::now();
     for chunk in chunks
         .iter_mut()
-        .filter(|chunk| !chunk.is_done && chunk.yield_tx.is_none())
+        .filter(|chunk| !chunk.is_done && chunk.yield_tx.is_none() && chunk.not_before <= now)
     {
         worker_handles.push(chunk.spawn(
             session_id, url, client, total_size, validator, storage, cancel_tx, worker_tx,
@@ -231,4 +249,34 @@ pub(super) fn rebalance_workers(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_delay_doubles_and_caps() {
+        let secs: Vec<u64> = (0..8).map(|n| retry_delay(n).as_secs()).collect();
+        assert_eq!(secs, [1, 2, 4, 8, 16, 32, 32, 32]);
+    }
+
+    #[test]
+    fn schedule_retry_defers_respawn_and_spends_budget() {
+        let mut chunk = ActiveChunk::new(ChunkRange {
+            id: 0,
+            start: 0,
+            end: 99,
+        });
+        chunk.yield_tx = Some(watch::channel(false).0);
+        let before = Instant::now();
+
+        chunk.schedule_retry();
+
+        assert_eq!(chunk.retries, 1);
+        assert!(chunk.yield_tx.is_none());
+        assert!(chunk.not_before >= before + retry_delay(0));
+        assert_eq!(chunk.last_progress, chunk.not_before);
+        assert!(chunk.can_retry());
+    }
 }

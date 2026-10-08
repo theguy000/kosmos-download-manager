@@ -1,13 +1,12 @@
 use super::duplicate::{ExistingFile, TargetError, TargetMode, create_target};
 use super::resume::{SavedDownload, resume_chunks_are_valid};
-use super::scheduler::{MAX_CHUNK_RETRIES, spawn_download_workers};
+use super::scheduler::{MAX_CHUNK_RETRIES, retry_delay, spawn_download_workers};
 use super::{CoordinatorError, Session, calculate_downloaded, uses_range_workers};
 use crate::client::{HttpClient, RemoteFileInfo, is_strong_etag};
 use crate::engine::model::DownloadStatus;
 use crate::engine::worker::WorkerError;
 use crate::storage::{Storage, StorageError};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
@@ -62,11 +61,11 @@ pub(super) fn spawn_info_fetch(
                         }
                         Ok(info)
                     }.await;
-                    if saved.is_some() && retries < MAX_CHUNK_RETRIES
+                    if retries < MAX_CHUNK_RETRIES
                         && attempt.as_ref().is_err_and(WorkerError::is_retryable)
                     {
+                        tokio::time::sleep(retry_delay(retries)).await;
                         retries += 1;
-                        tokio::time::sleep(Duration::from_millis(200)).await;
                         continue;
                     }
                     break attempt;

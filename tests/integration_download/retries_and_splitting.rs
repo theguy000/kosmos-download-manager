@@ -294,7 +294,7 @@ async fn retry_exhaustion_keeps_partial_bytes_for_manual_resume() {
 
     let terminal = wait_for_snapshot(
         &mut snapshot_rx,
-        Duration::from_secs(5),
+        Duration::from_secs(12), // covers the 1s + 2s + 4s retry backoff
         "persistent drops did not reach a terminal state",
         |snap| {
             matches!(

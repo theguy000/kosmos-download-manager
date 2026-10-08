@@ -220,8 +220,7 @@ impl Session {
                     && let Some(chunk) = self.active_chunks.get_mut(chunk_id)
                     && chunk.can_retry()
                 {
-                    chunk.retries += 1;
-                    chunk.yield_tx = None;
+                    chunk.schedule_retry();
                     return;
                 }
                 let _ = self.cancel_tx.send(true);
