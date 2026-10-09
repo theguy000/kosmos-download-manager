@@ -19,7 +19,6 @@ pub(in crate::engine) enum WorkerMsg {
         session_id: u64,
         chunk_id: usize,
         error: WorkerError,
-        retryable: bool,
     },
 }
 

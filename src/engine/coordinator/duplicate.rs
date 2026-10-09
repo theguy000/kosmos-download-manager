@@ -1,11 +1,11 @@
+use super::identity::verify_saved_region;
 use super::metadata::create_collision_free;
 use super::resume::seed_existing_prefix;
 use super::scheduler::ActiveChunk;
 use super::{Session, calculate_downloaded, uses_range_workers};
-use crate::client::{HttpClient, RemoteFileInfo};
+use crate::client::RemoteFileInfo;
 use crate::engine::chunks::ChunkRange;
 use crate::engine::model::{DownloadStatus, DuplicateChoice, DuplicatePrompt};
-use crate::engine::worker::OVERLAP_BYTES;
 use crate::storage::{Storage, StorageError};
 use std::path::{Path, PathBuf};
 
@@ -382,9 +382,7 @@ impl Session {
                 source,
             })) => self.fail_target(filename, path, &source),
             Err(error) => {
-                self.status =
-                    DownloadStatus::Failed(format!("Could not create download file: {error}"));
-                self.publish(None, 0, 0, None, false);
+                self.fail_early(format!("Could not create download file: {error}"));
             }
         }
     }
@@ -542,7 +540,17 @@ impl Session {
         let client = self.client.clone();
         let url = self.current_url.clone();
         let validator = info.resume_validator().map(str::to_owned);
-        verify_saved_bytes(&client, &url, validator.as_deref(), total, storage, bytes).await
+        verify_saved_region(
+            &client,
+            &url,
+            validator.as_deref(),
+            total,
+            storage,
+            0,
+            bytes,
+        )
+        .await
+        .map_err(|error| error.to_string())
     }
 
     /// Reports an existing file that the engine refuses to reuse or replace.
@@ -550,46 +558,9 @@ impl Session {
         self.current_filename.clone_from(&existing.filename);
         self.current_path.clone_from(&existing.path);
         self.owns_target = false;
-        self.status = DownloadStatus::Failed(format!(
+        self.fail_early(format!(
             "Cannot use existing file {}: {reason}. Choose overwrite or a numbered copy instead",
             existing.path.display()
         ));
-        self.publish(None, 0, 0, None, false);
     }
-}
-
-/// Samples the first and last saved bytes of a partial file against the remote file.
-/// Sampling can miss changes outside the checked regions, so it is a heuristic only.
-async fn verify_saved_bytes(
-    client: &HttpClient,
-    url: &str,
-    validator: Option<&str>,
-    total: u64,
-    storage: &Storage,
-    bytes: u64,
-) -> Result<(), String> {
-    let length = bytes.min(OVERLAP_BYTES);
-    let mut starts = vec![0];
-    if bytes > length {
-        starts.push(bytes - length);
-    }
-
-    for start in starts {
-        let sample = {
-            let storage = storage.clone();
-            tokio::task::spawn_blocking(move || {
-                let mut buffer = vec![0; length as usize];
-                storage.read_at(start, &mut buffer)?;
-                Ok::<_, StorageError>(buffer)
-            })
-            .await
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?
-        };
-        client
-            .verify_range(url, start, &sample, total, validator)
-            .await
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
 }

@@ -1,4 +1,4 @@
-use super::error::{WorkerError, is_retryable_body_error};
+use super::error::WorkerError;
 use super::protocol::{WorkerMsg, send_worker_msg, send_yielded};
 use crate::client::ClientError;
 use crate::storage::Storage;
@@ -110,7 +110,6 @@ pub(super) async fn copy_response_body(
                                 session_id,
                                 chunk_id,
                                 error: mode.overrun_error(expected_bytes),
-                                retryable: false,
                             },
                         )
                         .await;
@@ -125,7 +124,6 @@ pub(super) async fn copy_response_body(
                             session_id,
                             chunk_id,
                             error: mode.offset_error(),
-                            retryable: false,
                         },
                     )
                     .await;
@@ -167,7 +165,6 @@ pub(super) async fn copy_response_body(
                             session_id,
                             chunk_id,
                             error,
-                            retryable: false,
                         },
                     )
                     .await;
@@ -194,7 +191,6 @@ pub(super) async fn copy_response_body(
                 if *cancel_rx.borrow() {
                     return;
                 }
-                let retryable = is_retryable_body_error(&e);
                 let _ = send_worker_msg(
                     worker_tx,
                     cancel_rx,
@@ -202,7 +198,6 @@ pub(super) async fn copy_response_body(
                         session_id,
                         chunk_id,
                         error: WorkerError::ResponseBody(e),
-                        retryable,
                     },
                 )
                 .await;
@@ -224,7 +219,6 @@ pub(super) async fn copy_response_body(
                                     received,
                                     expected: expected_bytes,
                                 },
-                                retryable: true,
                             },
                         )
                         .await;
@@ -247,7 +241,6 @@ pub(super) async fn copy_response_body(
                                 session_id,
                                 chunk_id,
                                 error,
-                                retryable: false,
                             },
                         )
                         .await;

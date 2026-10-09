@@ -1,8 +1,8 @@
 use super::metadata::{FetchInfoKind, spawn_info_fetch};
 use super::{CoordinatorError, Session};
 use crate::engine::model::DownloadStatus;
-use std::time::Instant;
 use tokio::sync::watch;
+use tokio::time::Instant;
 
 const MAX_CONTENT_RESTARTS: u8 = 2;
 

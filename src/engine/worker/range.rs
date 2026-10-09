@@ -1,6 +1,6 @@
 use super::OVERLAP_BYTES;
 use super::body::{BodyCopyMode, copy_response_body};
-use super::error::{WorkerError, is_retryable_client_error};
+use super::error::WorkerError;
 use super::protocol::{WorkerMsg, send_worker_msg, send_yielded};
 use crate::client::{HttpClient, is_strong_etag};
 use crate::engine::chunks::ChunkRange;
@@ -45,7 +45,6 @@ pub(in crate::engine) fn spawn_chunk_worker(
                     session_id,
                     chunk_id,
                     error: WorkerError::InvalidRange("Invalid chunk range"),
-                    retryable: false,
                 },
             )
             .await;
@@ -60,7 +59,6 @@ pub(in crate::engine) fn spawn_chunk_worker(
                     session_id,
                     chunk_id,
                     error: WorkerError::InvalidRange("Saved chunk progress exceeds its range"),
-                    retryable: false,
                 },
             )
             .await;
@@ -88,7 +86,6 @@ pub(in crate::engine) fn spawn_chunk_worker(
                     session_id,
                     chunk_id,
                     error: WorkerError::InvalidRange("Chunk offset overflowed"),
-                    retryable: false,
                 },
             )
             .await;
@@ -133,7 +130,6 @@ pub(in crate::engine) fn spawn_chunk_worker(
                             if *cancel_rx.borrow() {
                                 return;
                             }
-                            let retryable = is_retryable_client_error(&e);
                             let _ = send_worker_msg(
                                 &worker_tx,
                                 &mut cancel_rx,
@@ -141,7 +137,6 @@ pub(in crate::engine) fn spawn_chunk_worker(
                                     session_id,
                                     chunk_id,
                                     error: WorkerError::Client(e),
-                                    retryable,
                                 },
                             )
                             .await;

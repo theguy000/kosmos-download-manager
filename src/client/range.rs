@@ -32,7 +32,7 @@ impl HttpClient {
         }
 
         // Dates are advisory: without proving their strength, do not send them as If-Range.
-        if requested_range && let Some(validator) = if_range.filter(|value| is_strong_etag(value)) {
+        if requested_range && let Some(validator) = strong_etag(if_range) {
             req = req.header(IF_RANGE, validator);
         }
 
@@ -46,14 +46,7 @@ impl HttpClient {
                 .headers()
                 .get(CONTENT_RANGE)
                 .and_then(|value| value.to_str().ok())
-                .and_then(|value| {
-                    let mut parts = value.split_whitespace();
-                    if !parts.next()?.eq_ignore_ascii_case("bytes") {
-                        return None;
-                    }
-                    let total = parts.next()?.strip_prefix("*/")?.parse::<u64>().ok()?;
-                    parts.next().is_none().then_some(total)
-                });
+                .and_then(parse_unsatisfied_range_total);
             if total.is_some_and(|total| total != expected_total) {
                 return Err(ClientError::ContentChanged);
             }
@@ -69,7 +62,7 @@ impl HttpClient {
         // Returning 200 OK means the server ignored the Range header and sent from byte 0.
         if requested_range && status != reqwest::StatusCode::PARTIAL_CONTENT {
             if status == reqwest::StatusCode::OK
-                && let Some(validator) = if_range.filter(|value| is_strong_etag(value))
+                && let Some(validator) = strong_etag(if_range)
                 && response
                     .headers()
                     .get(ETAG)
@@ -138,6 +131,11 @@ struct ContentRange {
     start: u64,
     end: u64,
     total: Option<u64>,
+}
+
+/// The validator only when it is a strong `ETag`; dates and weak tags never prove identity.
+fn strong_etag(validator: Option<&str>) -> Option<&str> {
+    validator.filter(|value| is_strong_etag(value))
 }
 
 pub(crate) fn is_strong_etag(etag: &str) -> bool {
@@ -221,7 +219,7 @@ fn validate_range_response(
         }
     }
 
-    if let Some(validator) = if_range.filter(|validator| is_strong_etag(validator))
+    if let Some(validator) = strong_etag(if_range)
         && let Some(etag) = headers.get(ETAG).and_then(|value| value.to_str().ok())
         && etag != validator
     {
@@ -241,16 +239,7 @@ fn validate_range_response(
 }
 
 fn parse_content_range(content_range: &str) -> Option<ContentRange> {
-    let mut parts = content_range.split_whitespace();
-    if !parts.next()?.eq_ignore_ascii_case("bytes") {
-        return None;
-    }
-    let range_and_total = parts.next()?;
-    if parts.next().is_some() {
-        return None;
-    }
-
-    let (range, total) = range_and_total.split_once('/')?;
+    let (range, total) = bytes_range_spec(content_range)?.split_once('/')?;
     let (start, end) = range.split_once('-')?;
     let start = start.parse().ok()?;
     let end = end.parse().ok()?;
@@ -269,6 +258,24 @@ fn parse_content_range(content_range: &str) -> Option<ContentRange> {
     };
 
     Some(ContentRange { start, end, total })
+}
+
+/// Parses the total from an unsatisfied-range Content-Range: `bytes */12345` -> `Some(12345)`.
+fn parse_unsatisfied_range_total(content_range: &str) -> Option<u64> {
+    bytes_range_spec(content_range)?
+        .strip_prefix("*/")?
+        .parse()
+        .ok()
+}
+
+/// Returns the single range spec after the `bytes` unit of a Content-Range value.
+fn bytes_range_spec(content_range: &str) -> Option<&str> {
+    let mut parts = content_range.split_whitespace();
+    if !parts.next()?.eq_ignore_ascii_case("bytes") {
+        return None;
+    }
+    let spec = parts.next()?;
+    parts.next().is_none().then_some(spec)
 }
 
 /// Parses the total length from a Content-Range header: `bytes 0-0/12345` -> `Some(12345)`

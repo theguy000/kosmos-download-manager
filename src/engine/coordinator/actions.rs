@@ -5,8 +5,8 @@ use super::resume::SavedDownload;
 use super::{CoordinatorError, Session, calculate_downloaded, uses_range_workers};
 use crate::engine::model::{DownloadAction, DownloadStatus};
 use std::path::PathBuf;
-use std::time::Instant;
 use tokio::sync::watch;
+use tokio::time::Instant;
 
 impl Session {
     pub(super) async fn handle_action(&mut self, action: DownloadAction) {
@@ -40,7 +40,7 @@ impl Session {
                 ) {
                     self.duplicate = None;
                     let _ = self.cancel_tx.send(true);
-                    let range_download = self.file_info.as_ref().is_some_and(uses_range_workers);
+                    let range_download = self.range_download();
                     let total_size = self.file_info.as_ref().and_then(|info| info.content_length);
                     self.wait_for_active_tasks().await;
                     match drain_cancelled_progress(
@@ -49,17 +49,13 @@ impl Session {
                         &mut self.active_chunks,
                         range_download,
                         total_size,
-                        self.file_info.as_ref().is_some_and(uses_range_workers),
+                        range_download,
                     ) {
                         Ok(()) => {
                             self.status = DownloadStatus::Paused;
                             self.current_speed = 0;
                             self.bytes_since_last_tick = 0;
-                            self.publish(
-                                total_size,
-                                calculate_downloaded(&self.active_chunks),
-                                0,
-                                None,
+                            self.publish_live(
                                 self.file_info.as_ref().is_none_or(uses_range_workers),
                             );
                         }
@@ -69,15 +65,7 @@ impl Session {
                                 self.restart_required = true;
                                 return;
                             }
-                            self.status = DownloadStatus::Failed(error.to_string());
-                            self.current_speed = 0;
-                            self.publish(
-                                total_size,
-                                calculate_downloaded(&self.active_chunks),
-                                0,
-                                None,
-                                false,
-                            );
+                            self.fail_download(error.to_string(), false);
                         }
                     }
                 }
@@ -231,13 +219,7 @@ impl Session {
         self.bytes_since_last_tick = 0;
         self.last_tick = Instant::now();
 
-        self.publish(
-            self.file_info.as_ref().and_then(|i| i.content_length),
-            calculate_downloaded(&self.active_chunks),
-            0,
-            None,
-            self.file_info.as_ref().is_none_or(uses_range_workers),
-        );
+        self.publish_live(self.file_info.as_ref().is_none_or(uses_range_workers));
 
         let kind = if self.active_storage.is_some() {
             FetchInfoKind::Resume

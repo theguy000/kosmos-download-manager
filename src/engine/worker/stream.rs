@@ -1,5 +1,5 @@
 use super::body::{BodyCopyMode, copy_response_body};
-use super::error::{WorkerError, is_retryable_client_error};
+use super::error::WorkerError;
 use super::protocol::{WorkerMsg, send_worker_msg};
 use crate::client::HttpClient;
 use crate::storage::Storage;
@@ -26,7 +26,6 @@ pub(in crate::engine) fn spawn_stream_worker(
                         if *cancel_rx.borrow() {
                             return;
                         }
-                        let retryable = is_retryable_client_error(&e);
                         let _ = send_worker_msg(
                             &worker_tx,
                             &mut cancel_rx,
@@ -34,7 +33,6 @@ pub(in crate::engine) fn spawn_stream_worker(
                                 session_id,
                                 chunk_id,
                                 error: WorkerError::Client(e),
-                                retryable,
                             },
                         )
                         .await;

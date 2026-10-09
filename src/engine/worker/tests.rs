@@ -148,13 +148,13 @@ fn only_error(
         session_id: actual_session_id,
         chunk_id: actual_chunk_id,
         error,
-        retryable,
     }) = messages.pop()
     else {
         panic!("expected worker error");
     };
     assert_eq!(actual_session_id, session_id);
     assert_eq!(actual_chunk_id, chunk_id);
+    let retryable = error.is_retryable();
     (error, retryable)
 }
 
@@ -444,14 +444,11 @@ async fn truncated_range_body_error_is_retryable() {
     server.join().unwrap();
 
     let messages = take_messages(&mut worker_rx);
-    let Some(WorkerMsg::Error {
-        error: WorkerError::ResponseBody(_),
-        retryable: true,
-        ..
-    }) = messages.last()
-    else {
-        panic!("expected retryable body error");
+    let Some(WorkerMsg::Error { error, .. }) = messages.last() else {
+        panic!("expected worker error");
     };
+    assert!(matches!(error, WorkerError::ResponseBody(_)));
+    assert!(error.is_retryable(), "expected retryable body error");
 }
 
 #[tokio::test]

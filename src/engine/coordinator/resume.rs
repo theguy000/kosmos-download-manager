@@ -1,9 +1,10 @@
+use super::identity::verify_saved_region;
 use super::scheduler::ActiveChunk;
 use super::uses_range_workers;
 use crate::client::{ClientError, HttpClient, RemoteFileInfo, is_strong_etag};
 use crate::engine::chunks::{ChunkRange, calculate_chunks};
-use crate::engine::worker::{OVERLAP_BYTES, WorkerError};
-use crate::storage::{Storage, StorageError};
+use crate::engine::worker::WorkerError;
+use crate::storage::Storage;
 
 pub(super) struct SavedDownload {
     pub(super) info: RemoteFileInfo,
@@ -43,28 +44,23 @@ impl SavedDownload {
             if downloaded == 0 {
                 continue;
             }
-            let end = range
+            if range
                 .start
                 .checked_add(downloaded)
-                .filter(|end| *end <= total_size && *end - 1 <= range.end)
-                .ok_or(WorkerError::InvalidRange("Invalid saved chunk progress"))?;
-            let length = downloaded.min(OVERLAP_BYTES);
-            let mut starts = vec![range.start];
-            if end - length != range.start {
-                starts.push(end - length);
+                .is_none_or(|end| end - 1 > range.end)
+            {
+                return Err(WorkerError::InvalidRange("Invalid saved chunk progress"));
             }
-            for start in starts {
-                let storage = self.storage.clone();
-                let expected = tokio::task::spawn_blocking(move || {
-                    let mut bytes = vec![0; length as usize];
-                    storage.read_at(start, &mut bytes)?;
-                    Ok::<_, StorageError>(bytes)
-                })
-                .await??;
-                client
-                    .verify_range(url, start, &expected, total_size, latest.resume_validator())
-                    .await?;
-            }
+            verify_saved_region(
+                client,
+                url,
+                latest.resume_validator(),
+                total_size,
+                &self.storage,
+                range.start,
+                downloaded,
+            )
+            .await?;
         }
         Ok(())
     }

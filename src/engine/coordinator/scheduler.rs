@@ -3,9 +3,10 @@ use crate::client::{HttpClient, RemoteFileInfo};
 use crate::engine::chunks::{ChunkRange, calculate_chunks};
 use crate::engine::worker::{WorkerMsg, spawn_chunk_worker, spawn_stream_worker};
 use crate::storage::Storage;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 pub(super) struct ActiveChunk {
     pub(super) range: ChunkRange,
@@ -278,5 +279,22 @@ mod tests {
         assert!(chunk.not_before >= before + retry_delay(0));
         assert_eq!(chunk.last_progress, chunk.not_before);
         assert!(chunk.can_retry());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn backoff_and_stall_follow_the_paused_clock() {
+        let mut chunk = ActiveChunk::new(ChunkRange {
+            id: 0,
+            start: 0,
+            end: 99,
+        });
+        assert!(chunk.last_progress.elapsed() < STALL_TIMEOUT);
+        tokio::time::advance(STALL_TIMEOUT).await;
+        assert!(chunk.last_progress.elapsed() >= STALL_TIMEOUT);
+
+        chunk.schedule_retry();
+        assert!(chunk.not_before > Instant::now());
+        tokio::time::advance(retry_delay(0)).await;
+        assert!(chunk.not_before <= Instant::now());
     }
 }

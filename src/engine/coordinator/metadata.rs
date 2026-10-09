@@ -172,32 +172,21 @@ impl Session {
                     }
                     Err(error) => {
                         let error = CoordinatorError::StorageTask(error);
-                        self.status = DownloadStatus::Failed(format!(
+                        self.fail_early(format!(
                             "Could not create download file {}: {error}",
                             self.current_path.display()
                         ));
-                        self.publish(None, 0, 0, None, false);
                     }
                 }
             }
             (kind @ (FetchInfoKind::Resume | FetchInfoKind::Restart), Ok(info)) => {
                 let Some(storage) = self.active_storage.as_ref() else {
-                    self.status =
-                        DownloadStatus::Failed("Missing storage for paused download".to_string());
-                    self.publish(
-                        self.file_info
-                            .as_ref()
-                            .and_then(|current| current.content_length),
-                        calculate_downloaded(&self.active_chunks),
-                        0,
-                        None,
-                        false,
-                    );
+                    self.fail_download("Missing storage for paused download".into(), false);
                     return;
                 };
 
-                let was_resumable = !matches!(kind, FetchInfoKind::Restart)
-                    && self.file_info.as_ref().is_some_and(uses_range_workers);
+                let was_resumable =
+                    !matches!(kind, FetchInfoKind::Restart) && self.range_download();
                 let resume = match info.content_length {
                     Some(total_size)
                         if uses_range_workers(&info)
@@ -240,17 +229,9 @@ impl Session {
                             true,
                         );
                     } else {
-                        self.status = DownloadStatus::Failed(
-                                    "Cannot safely resume: the remote file changed or could not be validated"
-                                        .to_string(),
-                                );
-                        self.publish(
-                            self.file_info
-                                .as_ref()
-                                .and_then(|current| current.content_length),
-                            calculate_downloaded(&self.active_chunks),
-                            0,
-                            None,
+                        self.fail_download(
+                            "Cannot safely resume: the remote file changed or could not be validated"
+                                .into(),
                             false,
                         );
                     }
@@ -279,33 +260,16 @@ impl Session {
                             );
                             self.file_info = Some(info);
                             self.status = DownloadStatus::Downloading;
-                            self.publish(
-                                total_size,
-                                0,
-                                0,
-                                None,
-                                self.file_info.as_ref().is_some_and(uses_range_workers),
-                            );
+                            self.publish(total_size, 0, 0, None, self.range_download());
                         }
                         Err(err) => {
-                            self.status = DownloadStatus::Failed(err.to_string());
-                            self.publish(
-                                self.file_info
-                                    .as_ref()
-                                    .and_then(|current| current.content_length),
-                                calculate_downloaded(&self.active_chunks),
-                                0,
-                                None,
-                                false,
-                            );
+                            self.fail_download(err.to_string(), false);
                         }
                     }
                 }
             }
             (FetchInfoKind::Start { .. }, Err(err)) => {
-                let retryable = err.is_retryable();
-                self.status = DownloadStatus::Failed(err.to_string());
-                self.publish(None, 0, 0, None, retryable);
+                self.fail_download(err.to_string(), err.is_retryable());
             }
             (
                 FetchInfoKind::Resume | FetchInfoKind::Restart | FetchInfoKind::Complete,
@@ -315,17 +279,7 @@ impl Session {
                     self.restart_required = true;
                     return;
                 }
-                let retryable = err.is_retryable();
-                self.status = DownloadStatus::Failed(err.to_string());
-                self.publish(
-                    self.file_info
-                        .as_ref()
-                        .and_then(|current| current.content_length),
-                    calculate_downloaded(&self.active_chunks),
-                    0,
-                    None,
-                    retryable,
-                );
+                self.fail_download(err.to_string(), err.is_retryable());
             }
         }
     }
@@ -378,8 +332,7 @@ impl Session {
             }
             _ => source.to_string(),
         };
-        self.status = DownloadStatus::Failed(message);
-        self.publish(None, 0, 0, None, false);
+        self.fail_early(message);
     }
 }
 

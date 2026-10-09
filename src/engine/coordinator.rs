@@ -1,5 +1,6 @@
 mod actions;
 mod duplicate;
+mod identity;
 mod lifecycle;
 mod metadata;
 mod progress;
@@ -20,10 +21,11 @@ use scheduler::{ActiveChunk, MAX_CHUNK_RETRIES};
 use speed::SpeedMeter;
 use std::cell::LazyCell;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 #[derive(Debug, Error)]
 enum CoordinatorError {

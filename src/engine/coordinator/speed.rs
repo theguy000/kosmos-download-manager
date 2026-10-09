@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::time::Instant;
 
 /// Displayed speed is the average over this trailing window.
 const WINDOW: Duration = Duration::from_secs(6);

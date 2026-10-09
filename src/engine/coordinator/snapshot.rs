@@ -1,7 +1,7 @@
 use super::scheduler::rebalance_workers;
 use super::{Session, calculate_downloaded, uses_range_workers};
 use crate::engine::model::{ChunkSnapshot, DownloadSnapshot, DownloadStatus};
-use std::time::Instant;
+use tokio::time::Instant;
 
 impl Session {
     pub(super) fn tick(&mut self) {
@@ -20,16 +20,7 @@ impl Session {
                     &self.worker_tx,
                 )
             {
-                let _ = self.cancel_tx.send(true);
-                self.status = DownloadStatus::Failed(error.to_string());
-                self.current_speed = 0;
-                self.publish(
-                    info.content_length,
-                    calculate_downloaded(&self.active_chunks),
-                    0,
-                    None,
-                    uses_range_workers(info),
-                );
+                self.fail_download(error.to_string(), self.range_download());
                 return;
             }
             let now = Instant::now();
@@ -49,7 +40,7 @@ impl Session {
                 .filter(|&total| total > downloaded)
                 .and_then(|total| (total - downloaded).checked_div(self.current_speed));
 
-            let resumable = self.file_info.as_ref().is_some_and(uses_range_workers);
+            let resumable = self.range_download();
 
             self.publish(
                 total_bytes,
@@ -59,6 +50,38 @@ impl Session {
                 resumable,
             );
         }
+    }
+
+    /// Whether this download runs on ranged workers (and so can pause and resume).
+    pub(super) fn range_download(&self) -> bool {
+        self.file_info.as_ref().is_some_and(uses_range_workers)
+    }
+
+    /// Cancels workers and records a terminal failure with the live byte counts.
+    /// Every mid-download failure goes through here, so "Failed means cancelled, zero speed"
+    /// holds in one place.
+    pub(super) fn fail_download(&mut self, message: String, resumable: bool) {
+        let _ = self.cancel_tx.send(true);
+        self.status = DownloadStatus::Failed(message);
+        self.current_speed = 0;
+        self.publish_live(resumable);
+    }
+
+    /// Records a failure before any bytes or file metadata exist for this session.
+    pub(super) fn fail_early(&mut self, message: String) {
+        self.status = DownloadStatus::Failed(message);
+        self.publish(None, 0, 0, None, false);
+    }
+
+    /// Publishes the current totals with zero speed and no ETA.
+    pub(super) fn publish_live(&self, resumable: bool) {
+        self.publish(
+            self.file_info.as_ref().and_then(|info| info.content_length),
+            calculate_downloaded(&self.active_chunks),
+            0,
+            None,
+            resumable,
+        );
     }
 
     pub(super) fn publish(

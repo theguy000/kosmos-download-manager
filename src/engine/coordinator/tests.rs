@@ -17,7 +17,6 @@ fn pause_preserves_queued_failures_and_other_workers_progress() {
         session_id: 0,
         chunk_id: 0,
         error: WorkerError::InvalidRange("stale"),
-        retryable: false,
     })
     .unwrap();
     tx.try_send(WorkerMsg::Progress {
@@ -30,7 +29,6 @@ fn pause_preserves_queued_failures_and_other_workers_progress() {
         session_id: 1,
         chunk_id: 0,
         error: WorkerError::InvalidRange("invalid range"),
-        retryable: false,
     })
     .unwrap();
     tx.try_send(WorkerMsg::Progress {
@@ -76,7 +74,6 @@ fn pause_preserves_only_safely_retryable_failures_for_resume() {
                 received: downloaded,
                 expected: 4,
             },
-            retryable: true,
         })
         .unwrap();
         tx.try_send(WorkerMsg::Progress {

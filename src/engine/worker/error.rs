@@ -29,9 +29,7 @@ impl WorkerError {
 
     pub(in crate::engine) fn is_retryable(&self) -> bool {
         match self {
-            Self::Client(ClientError::Http(error)) | Self::ResponseBody(error) => {
-                is_retryable_body_error(error)
-            }
+            Self::ResponseBody(error) => is_retryable_body_error(error),
             Self::Client(error) => is_retryable_client_error(error),
             Self::UnexpectedEof { .. } => true,
             _ => false,
@@ -45,12 +43,12 @@ fn is_retryable_request_error(error: &reqwest::Error) -> bool {
         && (error.is_connect() || error.is_timeout() || error.is_request() || error.is_body())
 }
 
-pub(super) fn is_retryable_body_error(error: &reqwest::Error) -> bool {
+fn is_retryable_body_error(error: &reqwest::Error) -> bool {
     // `Response::chunk` wraps lower-level frame failures as decode errors.
     is_retryable_request_error(error) || (!error.is_builder() && error.is_decode())
 }
 
-pub(super) fn is_retryable_client_error(error: &ClientError) -> bool {
+fn is_retryable_client_error(error: &ClientError) -> bool {
     match error {
         ClientError::Http(error) => is_retryable_request_error(error),
         ClientError::BadStatus(status, _) => {

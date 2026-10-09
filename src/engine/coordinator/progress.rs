@@ -1,11 +1,11 @@
 use super::metadata::{FetchInfoKind, spawn_info_fetch};
 use super::resume::SavedDownload;
 use super::scheduler::ActiveChunk;
-use super::{CoordinatorError, Session, calculate_downloaded, uses_range_workers};
+use super::{CoordinatorError, Session};
 use crate::engine::model::DownloadStatus;
 use crate::engine::worker::WorkerMsg;
-use std::time::Instant;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 fn record_progress(
     chunks: &mut [ActiveChunk],
@@ -84,11 +84,10 @@ pub(super) fn drain_cancelled_progress(
                 session_id: sid,
                 chunk_id,
                 error: source,
-                retryable,
             } if sid == session_id => {
                 // Pause may win the select race against an otherwise recoverable error.
                 let can_resume = resumable
-                    && retryable
+                    && source.is_retryable()
                     && chunks.get(chunk_id).is_some_and(ActiveChunk::can_retry);
                 if source.is_content_changed() {
                     error = Some(CoordinatorError::Worker { chunk_id, source });
@@ -115,7 +114,7 @@ impl Session {
                 if sid != self.session_id || self.status != DownloadStatus::Downloading {
                     return;
                 }
-                let range_download = self.file_info.as_ref().is_some_and(uses_range_workers);
+                let range_download = self.range_download();
                 let total_size = self.file_info.as_ref().and_then(|info| info.content_length);
                 if !record_progress(
                     &mut self.active_chunks,
@@ -124,18 +123,7 @@ impl Session {
                     range_download,
                     total_size,
                 ) {
-                    let _ = self.cancel_tx.send(true);
-                    self.status = DownloadStatus::Failed(
-                        "Worker reported invalid download progress".to_string(),
-                    );
-                    self.current_speed = 0;
-                    self.publish(
-                        total_size,
-                        calculate_downloaded(&self.active_chunks),
-                        0,
-                        None,
-                        false,
-                    );
+                    self.fail_download("Worker reported invalid download progress".into(), false);
                     return;
                 }
                 self.bytes_since_last_tick = self.bytes_since_last_tick.saturating_add(bytes_delta);
@@ -147,7 +135,7 @@ impl Session {
                 if sid != self.session_id || self.status != DownloadStatus::Downloading {
                     return;
                 }
-                let range_download = self.file_info.as_ref().is_some_and(uses_range_workers);
+                let range_download = self.range_download();
                 let total_size = self.file_info.as_ref().and_then(|info| info.content_length);
                 if !record_done(
                     &mut self.active_chunks,
@@ -155,16 +143,8 @@ impl Session {
                     range_download,
                     total_size,
                 ) {
-                    let _ = self.cancel_tx.send(true);
-                    self.status = DownloadStatus::Failed(
-                        "Worker completed before receiving its expected bytes".to_string(),
-                    );
-                    self.current_speed = 0;
-                    self.publish(
-                        self.file_info.as_ref().and_then(|info| info.content_length),
-                        calculate_downloaded(&self.active_chunks),
-                        0,
-                        None,
+                    self.fail_download(
+                        "Worker completed before receiving its expected bytes".into(),
                         false,
                     );
                     return;
@@ -206,7 +186,6 @@ impl Session {
                 session_id: sid,
                 chunk_id,
                 error,
-                retryable,
             } => {
                 if sid != self.session_id || self.status != DownloadStatus::Downloading {
                     return;
@@ -215,8 +194,9 @@ impl Session {
                     self.restart_required = true;
                     return;
                 }
+                let retryable = error.is_retryable();
                 if retryable
-                    && self.file_info.as_ref().is_some_and(uses_range_workers)
+                    && self.range_download()
                     && let Some(chunk) = self.active_chunks.get_mut(chunk_id)
                     && chunk.can_retry()
                 {
@@ -226,33 +206,29 @@ impl Session {
                 let _ = self.cancel_tx.send(true);
                 self.wait_for_active_tasks().await;
                 // Retain other chunks' queued progress when a network failure stops the session.
+                let range_download = self.range_download();
                 let drained = drain_cancelled_progress(
                     &mut self.worker_rx,
                     self.session_id,
                     &mut self.active_chunks,
-                    self.file_info.as_ref().is_some_and(uses_range_workers),
+                    range_download,
                     self.file_info.as_ref().and_then(|info| info.content_length),
-                    retryable,
+                    range_download,
                 );
                 if matches!(&drained, Err(CoordinatorError::Worker { source, .. }) if source.is_content_changed())
                 {
                     self.restart_required = true;
                     return;
                 }
-                self.status = DownloadStatus::Failed(format!("Stream #{chunk_id} error: {error}"));
-                self.current_speed = 0;
                 let can_resume = retryable
                     && match &drained {
                         Ok(()) => true,
                         Err(CoordinatorError::Worker { source, .. }) => source.is_retryable(),
                         Err(_) => false,
                     };
-                self.publish(
-                    self.file_info.as_ref().and_then(|i| i.content_length),
-                    calculate_downloaded(&self.active_chunks),
-                    0,
-                    None,
-                    can_resume && self.file_info.as_ref().is_some_and(uses_range_workers),
+                self.fail_download(
+                    format!("Stream #{chunk_id} error: {error}"),
+                    can_resume && range_download,
                 );
             }
         }
