@@ -1,34 +1,5 @@
 use super::*;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static NEXT_TEMP_FILE: AtomicUsize = AtomicUsize::new(0);
-
-struct TempFile {
-    path: PathBuf,
-}
-
-impl TempFile {
-    fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "kosmos-storage-{name}-{}-{}",
-            std::process::id(),
-            NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_file(&path);
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
+use crate::test_support::TempFile;
 
 #[test]
 fn test_storage_preallocation() {

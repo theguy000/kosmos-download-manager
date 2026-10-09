@@ -1,4 +1,4 @@
-use super::http::{is_head_request, start_local_server};
+use super::http::{TestRange, is_head_request, requested_byte_range_within, start_local_server};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -16,10 +16,6 @@ pub(crate) async fn start_mock_server_with_head_delay(
         async move {
             let is_head = is_head_request(&request);
 
-            let range_header = request
-                .lines()
-                .find(|line| line.to_ascii_lowercase().starts_with("range:"));
-
             if is_head {
                 tokio::time::sleep(head_delay).await;
                 let resp = format!(
@@ -32,16 +28,9 @@ pub(crate) async fn start_mock_server_with_head_delay(
                     payload.len()
                 );
                 let _ = socket.write_all(resp.as_bytes()).await;
-            } else if let Some(range_line) = range_header {
-                let range_part = range_line.split('=').nth(1).unwrap_or("").trim();
-                let mut parts = range_part.split('-');
-                let start: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-                let end: usize = parts
-                    .next()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(payload.len() - 1);
-                let end = end.min(payload.len() - 1);
-
+            } else if let Some(TestRange { start, end }) =
+                requested_byte_range_within(&request, payload.len())
+            {
                 let slice = &payload[start..=end];
                 let content_length = slice.len();
 

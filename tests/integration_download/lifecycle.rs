@@ -1,6 +1,6 @@
 use crate::support::fixtures::{TEST_DATA_SIZE, generate_test_payload, wait_for_snapshot};
 use crate::support::http::{
-    is_head_request, requested_byte_range, start_local_server, write_range_response,
+    TestRange, is_head_request, requested_byte_range, start_local_server, write_range_response,
 };
 use crate::support::mock_server::{
     start_mock_server, start_mock_server_with_head_delay, start_non_range_mock_server,
@@ -180,20 +180,7 @@ async fn test_full_multiconnection_download() {
     for (mut socket, request) in requests {
         assert!(peers.insert(socket.peer_addr().unwrap()));
         assert_eq!(request.lines().next(), Some("GET /payload.bin HTTP/1.1"));
-        let range = request
-            .lines()
-            .find_map(|line| {
-                let (name, value) = line.split_once(':')?;
-                name.eq_ignore_ascii_case("range").then_some(value.trim())
-            })
-            .unwrap();
-        let (start, end) = range
-            .strip_prefix("bytes=")
-            .unwrap()
-            .split_once('-')
-            .unwrap();
-        let start: usize = start.parse().unwrap();
-        let end: usize = end.parse().unwrap();
+        let TestRange { start, end } = requested_byte_range(&request).unwrap();
         assert!(starts.insert(start));
         assert!(start < TEST_DATA_SIZE && start.is_multiple_of(TEST_DATA_SIZE / 4));
         assert_eq!(end, start + TEST_DATA_SIZE / 4 - 1);

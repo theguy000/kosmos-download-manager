@@ -1,6 +1,7 @@
 use super::http::{
     ObservedRangeRequest, TestRange, is_head_request, request_header, requested_byte_range,
-    start_local_server, wait_until_released, write_metadata_response, write_range_response,
+    requested_byte_range_within, start_local_server, wait_until_released, write_metadata_response,
+    write_range_response,
 };
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -53,25 +54,12 @@ pub(crate) async fn start_changing_resource_server(
                 return;
             }
 
-            let range = request
-                .lines()
-                .find(|line| line.to_ascii_lowercase().starts_with("range:"));
-            let Some(range) = range else {
+            let Some(range) = requested_byte_range_within(&request, payload.len()) else {
                 return;
             };
-            let range = range.split('=').nth(1).unwrap_or("").trim();
-            let mut parts = range.split('-');
-            let start: usize = parts
-                .next()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(0);
-            let end = parts
-                .next()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(payload.len() - 1)
-                .min(payload.len() - 1);
+            let TestRange { start, end } = range;
             requests.lock().unwrap().push(ObservedRangeRequest {
-                range: TestRange { start, end },
+                range,
                 if_range: request_header(&request, "if-range").map(str::to_owned),
             });
             let slice = &payload[start..=end];

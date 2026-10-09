@@ -3,7 +3,7 @@ use crate::support::change_server::{
     start_between_range_change_server, start_changing_resource_server,
 };
 use crate::support::fixtures::{
-    TEST_DATA_SIZE, generate_offset_payload, regression_save_path, wait_for_snapshot,
+    OVERLAP_BYTES, TEST_DATA_SIZE, generate_offset_payload, regression_save_path, wait_for_snapshot,
 };
 use crate::support::http::TestRange;
 use crate::support::resume_server::start_no_etag_resume_server;
@@ -83,11 +83,13 @@ async fn no_etag_range_download_resumes_when_saved_bytes_match() {
     let requests = observed_requests(&server.requests);
     let resumed_worker = requests[request_count_before_resume..]
         .iter()
-        .find(|request| request.range.end == payload.len() - 1 && request.range.len() > 4096)
+        .find(|request| {
+            request.range.end == payload.len() - 1 && request.range.len() > OVERLAP_BYTES
+        })
         .expect("No-ETag resume did not request the remaining range");
     assert_eq!(
         resumed_worker.range.start,
-        paused_bytes - 4096,
+        paused_bytes - OVERLAP_BYTES,
         "No-ETag resume must verify a bounded overlap in its worker response"
     );
     assert_eq!(std::fs::read(&save_path).unwrap(), payload);
@@ -269,7 +271,8 @@ async fn no_etag_retry_restarts_after_saved_overlap_changes() {
     let requests = observed_requests(&server.requests);
     assert!(
         requests.iter().any(|request| {
-            request.range.start == saved_prefix_len - 4096 && request.range.end == full_range.end
+            request.range.start == saved_prefix_len - OVERLAP_BYTES
+                && request.range.end == full_range.end
         }),
         "Retry must request a bounded overlap before appending new bytes: {requests:?}"
     );

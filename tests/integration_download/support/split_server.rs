@@ -1,4 +1,6 @@
-use super::fixtures::{DYNAMIC_DATA_SIZE, DYNAMIC_INITIAL_CHUNK_SIZE, DYNAMIC_PREFIX_SIZE};
+use super::fixtures::{
+    DYNAMIC_DATA_SIZE, DYNAMIC_INITIAL_CHUNK_SIZE, DYNAMIC_PREFIX_SIZE, OVERLAP_BYTES,
+};
 use super::http::{
     ObservedRangeRequest, TestRange, is_head_request, request_header, requested_byte_range,
     start_local_server, wait_until_released, write_metadata_response, write_range_headers,
@@ -111,7 +113,7 @@ pub(crate) async fn start_dynamic_split_server(
                 let mut discard = [0u8; 1];
                 tokio::select! {
                     _ = yield_late_body.notified() => {
-                        let mut corrupt = payload.as_slice()[DYNAMIC_PREFIX_SIZE..DYNAMIC_PREFIX_SIZE + 4096].to_vec();
+                        let mut corrupt = payload.as_slice()[DYNAMIC_PREFIX_SIZE..DYNAMIC_PREFIX_SIZE + OVERLAP_BYTES].to_vec();
                         for byte in &mut corrupt {
                             *byte ^= 0xff;
                         }

@@ -30,11 +30,34 @@ pub(crate) fn request_header<'a>(request: &'a str, name: &str) -> Option<&'a str
     })
 }
 
-pub(crate) fn requested_byte_range(request: &str) -> Option<TestRange> {
+/// Parses `Range: bytes=start-[end]`; an open end is `None`.
+fn requested_range_bounds(request: &str) -> Option<(usize, Option<usize>)> {
     let value = request_header(request, "range")?.strip_prefix("bytes=")?;
     let (start, end) = value.split_once('-')?;
-    let start = start.trim().parse::<usize>().ok()?;
-    let end = end.trim().parse::<usize>().ok()?;
+    let start = start.trim().parse().ok()?;
+    let end = end.trim();
+    let end = if end.is_empty() {
+        None
+    } else {
+        Some(end.parse().ok()?)
+    };
+    Some((start, end))
+}
+
+/// A closed `bytes=start-end` request; open-ended ranges are rejected.
+pub(crate) fn requested_byte_range(request: &str) -> Option<TestRange> {
+    let (start, Some(end)) = requested_range_bounds(request)? else {
+        return None;
+    };
+    (start <= end).then_some(TestRange { start, end })
+}
+
+/// A `bytes=start-[end]` request resolved against a payload of `total` bytes (open end and
+/// overlong end clamp to the last byte).
+pub(crate) fn requested_byte_range_within(request: &str, total: usize) -> Option<TestRange> {
+    let last = total.checked_sub(1)?;
+    let (start, end) = requested_range_bounds(request)?;
+    let end = end.unwrap_or(last).min(last);
     (start <= end).then_some(TestRange { start, end })
 }
 

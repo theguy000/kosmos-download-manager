@@ -3,43 +3,14 @@ use super::{WorkerError, WorkerMsg, spawn_chunk_worker, spawn_stream_worker};
 use crate::client::HttpClient;
 use crate::engine::chunks::ChunkRange;
 use crate::storage::Storage;
+use crate::test_support::TempFile;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc as std_mpsc;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-
-static NEXT_TEMP_FILE: AtomicUsize = AtomicUsize::new(0);
-
-struct TempFile {
-    path: PathBuf,
-}
-
-impl TempFile {
-    fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "kosmos-worker-{name}-{}-{}",
-            std::process::id(),
-            NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_file(&path);
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
 
 fn chunked_response(status: &str, headers: &str, chunks: &[&[u8]]) -> Vec<u8> {
     let mut response = format!(

@@ -7,6 +7,9 @@ pub(crate) const DYNAMIC_DATA_SIZE: usize = 2 * 1024 * 1024;
 pub(crate) const DYNAMIC_INITIAL_CHUNK_SIZE: usize = DYNAMIC_DATA_SIZE / 2;
 pub(crate) const DYNAMIC_PREFIX_SIZE: usize = 128 * 1024;
 pub(crate) const MIN_DYNAMIC_CHILD_SIZE: usize = 256 * 1024;
+/// Mirrors the engine's private worker `OVERLAP_BYTES`: the saved-byte sample the engine
+/// verifies before resuming. Keep in sync with `src/engine/worker.rs`.
+pub(crate) const OVERLAP_BYTES: usize = 4096;
 pub(crate) const DYNAMIC_ETAG: &str = "\"dynamic-v1\"";
 pub(crate) const RETRY_ETAG: &str = "\"retry-v1\"";
 pub(crate) const RETRY_PREFIX_SIZE: usize = 64 * 1024;
