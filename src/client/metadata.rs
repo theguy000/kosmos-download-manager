@@ -113,10 +113,10 @@ impl HttpClient {
         let mut info = RemoteFileInfo::from_headers(url, headers);
         info.accepts_ranges = status == reqwest::StatusCode::PARTIAL_CONTENT;
         if info.accepts_ranges {
+            // A 206 Content-Length is the probe body's length, never the file size.
             info.content_length = super::range::parse_content_range_total(
                 headers.get(CONTENT_RANGE).and_then(|v| v.to_str().ok()),
-            )
-            .or(info.content_length);
+            );
         }
 
         Ok(info)

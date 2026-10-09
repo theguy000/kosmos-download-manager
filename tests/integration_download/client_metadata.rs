@@ -86,6 +86,39 @@ async fn metadata_uses_head_fields_or_range_probe_total() {
 }
 
 #[tokio::test]
+async fn range_probe_with_unknown_total_does_not_report_probe_body_length() {
+    for content_range in ["bytes 0-0/*", ""] {
+        let addr = start_local_server(move |mut socket, request| async move {
+            let response = if is_head_request(&request) {
+                "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .to_owned()
+            } else {
+                let range = if content_range.is_empty() {
+                    String::new()
+                } else {
+                    format!("Content-Range: {content_range}\r\n")
+                };
+                format!(
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: 1\r\n{range}\
+                     Connection: close\r\n\r\nx"
+                )
+            };
+            let _ = socket.write_all(response.as_bytes()).await;
+        })
+        .await;
+        let info = HttpClient::new()
+            .fetch_info(&format!("http://{addr}/unknown.bin"))
+            .await
+            .expect("Metadata lookup failed");
+        assert!(info.accepts_ranges, "Content-Range: {content_range:?}");
+        assert_eq!(
+            info.content_length, None,
+            "Content-Range: {content_range:?}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_server_ignores_range_returns_200() {
     // Mock server returns 200 OK when a range was requested
     let addr = start_local_server(|mut socket, request| async move {
