@@ -1,34 +1,29 @@
-const HOST_NAME = "com.kosmos.downloader";
+import { sendToNativeHost } from "./native.js";
 
-document.addEventListener("DOMContentLoaded", () => {
-  const statusBadge = document.getElementById("status-badge");
-  const interceptToggle = document.getElementById("intercept-toggle");
+const statusBadge = document.getElementById("status-badge");
+const interceptToggle = document.getElementById("intercept-toggle");
 
-  // Load current interception setting
-  chrome.storage.local.get(["interceptDownloads"], (items) => {
-    if (items.interceptDownloads !== undefined) {
-      interceptToggle.checked = items.interceptDownloads;
-    }
-  });
+function setStatus(text, state) {
+  statusBadge.textContent = text;
+  statusBadge.className = `status-badge ${state}`;
+}
 
-  // Handle toggle change
-  interceptToggle.addEventListener("change", () => {
-    chrome.storage.local.set({ interceptDownloads: interceptToggle.checked });
-  });
+// Load current interception setting (default: on, matching background.js)
+chrome.storage.local.get({ interceptDownloads: true }).then((items) => {
+  interceptToggle.checked = items.interceptDownloads;
+});
 
-  // Check connection status with native messaging host
-  try {
-    chrome.runtime.sendNativeMessage(HOST_NAME, { action: "ping" }, (response) => {
-      if (chrome.runtime.lastError || !response || response.status !== "ok") {
-        statusBadge.textContent = "Offline";
-        statusBadge.className = "status-badge disconnected";
-      } else {
-        statusBadge.textContent = "Connected";
-        statusBadge.className = "status-badge connected";
-      }
-    });
-  } catch (err) {
-    statusBadge.textContent = "Offline";
-    statusBadge.className = "status-badge disconnected";
+interceptToggle.addEventListener("change", () => {
+  chrome.storage.local.set({ interceptDownloads: interceptToggle.checked });
+});
+
+// The host answers "pong_offline" when it is registered but the app is not running.
+sendToNativeHost({ action: "ping" }).then((response) => {
+  if (response?.status !== "ok") {
+    setStatus("Offline", "disconnected");
+  } else if (response.message === "pong_offline") {
+    setStatus("App closed", "warning");
+  } else {
+    setStatus("Connected", "connected");
   }
 });

@@ -6,11 +6,7 @@ pub const DEFAULT_EXTENSION_ID: &str = "ghnbdddbpdglebhbgiaffnkeioomhfkn";
 
 #[must_use]
 pub fn default_allowed_origins(additional_ids: &[String]) -> Vec<String> {
-    let mut origins = vec![
-        format!("chrome-extension://{DEFAULT_EXTENSION_ID}/"),
-        // Include IDM extension ID so users testing with IDM extension or bridge can also connect
-        "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/".to_string(),
-    ];
+    let mut origins = vec![format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")];
     for id in additional_ids {
         let clean = id.trim().trim_matches('/');
         let origin = if clean.starts_with("chrome-extension://") {
@@ -152,6 +148,14 @@ mod tests {
         assert_eq!(val["type"], "stdio");
         assert_eq!(val["path"], exe.to_string_lossy().as_ref());
         assert_eq!(val["allowed_origins"][0], "chrome-extension://abc/");
+    }
+
+    #[test]
+    fn test_default_origins_trust_only_own_extension() {
+        assert_eq!(
+            default_allowed_origins(&[]),
+            vec![format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")]
+        );
     }
 
     #[test]

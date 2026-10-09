@@ -62,6 +62,14 @@
       background-color: #450a0a;
       color: #f87171;
     }
+    .status-badge.warning {
+      background-color: #422006;
+      color: #fbbf24;
+    }
+    .status-badge.pending {
+      background-color: #27272a;
+      color: #a1a1aa;
+    }
   </style>
 </head>
 <body>
@@ -72,7 +80,7 @@
 
   <div class="row">
     <span class="label">App Status</span>
-    <span id="status-badge" class="status-badge disconnected">Checking...</span>
+    <span id="status-badge" class="status-badge pending">Checking...</span>
   </div>
 
   <div class="row">
@@ -80,6 +88,6 @@
     <input type="checkbox" id="intercept-toggle" checked>
   </div>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

@@ -1,17 +1,22 @@
-# PowerShell script to register Kosmos Download Manager Native Messaging Host for Edge, Chrome, and Brave
+# Registers the Kosmos Download Manager native messaging host for Chrome, Edge, Brave and Chromium.
+# The executable owns the manifest, allowed origins and registry keys (src/host/registry.rs);
+# this script only locates (or builds) it and calls `--register`.
 [CmdletBinding()]
 param (
-    [string]$HostExecutablePath = ""
+    [string]$HostExecutablePath = "",
+    # Extra extension IDs to trust, e.g. an unpacked build with a different ID.
+    [string[]]$ExtensionId = @()
 )
 
 $ErrorActionPreference = "Stop"
 
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$rootDir = Split-Path -Parent $scriptDir
+
 Write-Host "=== Kosmos Download Manager Native Host Installer ===" -ForegroundColor Cyan
 
-# 1. Determine Host Executable Path
+# 1. Determine host executable path
 if ([string]::IsNullOrWhiteSpace($HostExecutablePath)) {
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $rootDir = Split-Path -Parent $scriptDir
     $candidates = @(
         (Join-Path $rootDir "target\release\kosmos-download-manager.exe"),
         (Join-Path $rootDir "target\debug\kosmos-download-manager.exe"),
@@ -22,67 +27,38 @@ if ([string]::IsNullOrWhiteSpace($HostExecutablePath)) {
         (Join-Path $scriptDir "kosmos-download-manager.exe"),
         (Join-Path $scriptDir "kosmos-downloader.exe")
     )
-    foreach ($cand in $candidates) {
-        if (Test-Path $cand) {
-            $HostExecutablePath = (Resolve-Path $cand).Path
-            break
+    $HostExecutablePath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if (-not $HostExecutablePath) {
+        Write-Host "Could not find a built executable. Building debug target..." -ForegroundColor Yellow
+        Push-Location $rootDir
+        try {
+            cargo build
+            if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit code $LASTEXITCODE" }
+        } finally {
+            Pop-Location
         }
+        $HostExecutablePath = Join-Path $rootDir "target\debug\kosmos-download-manager.exe"
     }
 }
 
 if (-not (Test-Path $HostExecutablePath)) {
-    Write-Host "Could not find built executable automatically. Building debug target..." -ForegroundColor Yellow
-    Push-Location (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
-    cargo build
-    Pop-Location
-    $HostExecutablePath = (Resolve-Path (Join-Path $rootDir "target\debug\kosmos-download-manager.exe")).Path
+    throw "Host executable not found: $HostExecutablePath"
 }
-
+$HostExecutablePath = (Resolve-Path $HostExecutablePath).Path
 Write-Host "Target Executable: $HostExecutablePath" -ForegroundColor Green
 
-# 2. Register Host via binary if supported
-try {
-    & $HostExecutablePath --register
-    Write-Host "Native host registered successfully via executable." -ForegroundColor Green
-} catch {
-    Write-Host "Falling back to direct registry installation..." -ForegroundColor Yellow
-
-    $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
-    $kosmosDir = Join-Path $localAppData "Kosmos Download Manager"
-    if (-not (Test-Path $kosmosDir)) {
-        New-Item -ItemType Directory -Path $kosmosDir -Force | Out-Null
-    }
-
-    $manifestPath = Join-Path $kosmosDir "com.kosmos.downloader.json"
-    $manifestJson = @{
-        "name" = "com.kosmos.downloader"
-        "description" = "Kosmos Download Manager Native Messaging Host"
-        "path" = $HostExecutablePath
-        "type" = "stdio"
-        "allowed_origins" = @(
-            "chrome-extension://ghnbdddbpdglebhbgiaffnkeioomhfkn/",
-            "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/"
-        )
-    } | ConvertTo-Json -Depth 5
-
-    Set-Content -Path $manifestPath -Value $manifestJson -Encoding UTF8
-
-    $regKeys = @(
-        "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.kosmos.downloader",
-        "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.kosmos.downloader",
-        "HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.kosmos.downloader"
-    )
-
-    foreach ($key in $regKeys) {
-        if (-not (Test-Path $key)) {
-            New-Item -Path $key -Force | Out-Null
-        }
-        Set-ItemProperty -Path $key -Name "(Default)" -Value $manifestPath
-        Write-Host "Registered in: $key" -ForegroundColor Gray
-    }
-
-    Write-Host "Native Messaging Host manifest created at: $manifestPath" -ForegroundColor Green
+# 2. Register via the binary. Start-Process -Wait is used because release builds use the
+#    Windows GUI subsystem, which `&` does not wait for and gives no reliable exit code.
+$registerArgs = @("--register")
+foreach ($id in $ExtensionId) {
+    $registerArgs += @("--extension-id", $id)
 }
+$process = Start-Process -FilePath $HostExecutablePath -ArgumentList $registerArgs -Wait -PassThru
+if ($process.ExitCode -ne 0) {
+    throw "Native host registration failed with exit code $($process.ExitCode)"
+}
+Write-Host "Native host registered successfully." -ForegroundColor Green
 
 Write-Host "`nExtension ID: ghnbdddbpdglebhbgiaffnkeioomhfkn" -ForegroundColor Cyan
 Write-Host "To install the extension:" -ForegroundColor White
