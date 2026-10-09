@@ -51,12 +51,13 @@ impl ExistingFile {
 }
 
 /// Directory targets get the server filename; everything else is an explicit file path.
+/// An extensionless path is a directory unless a file already occupies it.
 fn is_directory_target(save_path: &Path) -> bool {
     let display = save_path.to_string_lossy();
     save_path.is_dir()
-        || save_path.extension().is_none()
         || display.ends_with('/')
         || display.ends_with('\\')
+        || (save_path.extension().is_none() && !save_path.is_file())
 }
 
 /// Creates the target file for `mode`, never replacing a file the user did not confirm.

@@ -271,7 +271,7 @@ async fn test_target_exists_use_existing_complete_and_corrupt() {
 }
 
 #[tokio::test]
-async fn test_adversarial_extensionless_target_collision_fails_to_prompt() {
+async fn test_adversarial_extensionless_target_collision_prompts_on_existing_file() {
     let save_dir = std::env::temp_dir().join(format!("kosmos_adv_extless_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&save_dir);
     std::fs::create_dir_all(&save_dir).unwrap();
@@ -296,27 +296,21 @@ async fn test_adversarial_extensionless_target_collision_fails_to_prompt() {
         .await
         .unwrap();
 
-    // Empirically observe whether it emits DuplicatePrompt or crashes with Storage error
     let snap = wait_for_snapshot(
         &mut snapshot_rx,
         Duration::from_secs(3),
-        "Download did not update snapshot",
+        "Existing extensionless file did not emit a duplicate prompt",
         |snap| snap.duplicate.is_some() || matches!(snap.status, DownloadStatus::Failed(_)),
     )
     .await;
 
-    // EMPIRICAL ASSERTION: The bug causes is_directory_target(".../ffmpeg") to return true,
-    // which tries to create a directory named "ffmpeg". Because "ffmpeg" is already a file,
-    // create_dir_all fails and it transitions to Failed rather than emitting a DuplicatePrompt.
-    let bug_manifested =
-        snap.duplicate.is_none() && matches!(snap.status, DownloadStatus::Failed(_));
-    println!(
-        "test_adversarial_extensionless_target_collision: bug_manifested = {bug_manifested}, status = {:?}",
-        snap.status
-    );
-    assert!(
-        bug_manifested,
-        "Expected bug to manifest: extensionless file collision fails with Storage error instead of DuplicatePrompt"
+    let prompt = snap
+        .duplicate
+        .expect("Existing extensionless file must emit a DuplicatePrompt");
+    assert_eq!(prompt.filename, "ffmpeg");
+    assert_eq!(
+        std::fs::read(&target_file).unwrap(),
+        b"existing binary content"
     );
 
     let _ = std::fs::remove_dir_all(&save_dir);
