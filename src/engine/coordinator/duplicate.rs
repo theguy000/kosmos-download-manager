@@ -295,9 +295,7 @@ impl Session {
             return;
         }
 
-        self.current_filename = existing.filename;
-        self.current_path = existing.path;
-        self.owns_target = true;
+        self.set_target(existing.filename, existing.path, true);
         self.active_chunks = completed_chunks(total);
         self.active_storage = Some(storage);
         self.file_info = Some(info);
@@ -337,35 +335,10 @@ impl Session {
         }
 
         let validator = info.resume_validator().map(str::to_owned);
-        self.current_filename = existing.filename;
-        self.current_path = existing.path;
-        self.owns_target = true;
+        self.set_target(existing.filename, existing.path, true);
         self.active_chunks = seed_existing_prefix(existing.bytes, total, num_chunks);
-        for chunk in &mut self.active_chunks {
-            if chunk.is_done {
-                continue;
-            }
-            self.worker_handles.push(chunk.spawn(
-                self.session_id,
-                &self.current_url,
-                &self.client,
-                total,
-                validator.as_deref(),
-                &storage,
-                &self.cancel_tx,
-                &self.worker_tx,
-            ));
-        }
-        self.active_storage = Some(storage);
-        self.file_info = Some(info);
-        self.status = DownloadStatus::Downloading;
-        self.publish(
-            Some(total),
-            calculate_downloaded(&self.active_chunks),
-            0,
-            None,
-            true,
-        );
+        self.spawn_pending_chunks(total, validator.as_deref(), &storage);
+        self.enter_downloading(info, storage);
     }
 
     /// Opens an on-disk file at its remote size without truncating it.

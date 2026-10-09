@@ -176,7 +176,7 @@ impl Session {
                 }
             }
             (kind @ (FetchInfoKind::Resume | FetchInfoKind::Restart), Ok(info)) => {
-                let Some(storage) = self.active_storage.as_ref() else {
+                let Some(storage) = self.active_storage.clone() else {
                     self.fail_download("Missing storage for paused download".into(), false);
                     return;
                 };
@@ -199,31 +199,13 @@ impl Session {
                 let total_size = info.content_length;
                 if was_resumable {
                     if let Some(total_size) = resume {
-                        self.status = DownloadStatus::Downloading;
                         for chunk in &mut self.active_chunks {
                             // Completed chunks acknowledge again so pausing final verification can resume.
                             chunk.is_done = false;
                             chunk.retries = 0;
-                            self.worker_handles.push(chunk.spawn(
-                                self.session_id,
-                                &self.current_url,
-                                &self.client,
-                                total_size,
-                                info.resume_validator(),
-                                storage,
-                                &self.cancel_tx,
-                                &self.worker_tx,
-                            ));
                         }
-                        self.file_info = Some(info);
-
-                        self.publish(
-                            Some(total_size),
-                            calculate_downloaded(&self.active_chunks),
-                            0,
-                            None,
-                            true,
-                        );
+                        self.spawn_pending_chunks(total_size, info.resume_validator(), &storage);
+                        self.enter_downloading(info, storage);
                     } else {
                         self.fail_download(
                             "Cannot safely resume: the remote file changed or could not be validated"
@@ -248,15 +230,13 @@ impl Session {
                                 &self.client,
                                 &info,
                                 self.current_num_chunks,
-                                storage,
+                                &storage,
                                 &self.cancel_tx,
                                 &self.worker_tx,
                                 &mut self.active_chunks,
                                 &mut self.worker_handles,
                             );
-                            self.file_info = Some(info);
-                            self.status = DownloadStatus::Downloading;
-                            self.publish(total_size, 0, 0, None, self.range_download());
+                            self.enter_downloading(info, storage);
                         }
                         Err(err) => {
                             self.fail_download(err.to_string(), false);
@@ -291,11 +271,7 @@ impl Session {
         storage: Storage,
         num_chunks: usize,
     ) {
-        let total_size = info.content_length;
-        let resumable = uses_range_workers(&info);
-        self.current_filename = filename;
-        self.current_path = path;
-        self.owns_target = true;
+        self.set_target(filename, path, true);
         spawn_download_workers(
             self.session_id,
             &self.current_url,
@@ -308,17 +284,55 @@ impl Session {
             &mut self.active_chunks,
             &mut self.worker_handles,
         );
+        self.enter_downloading(info, storage);
+    }
+
+    /// Records which file this session writes and whether the engine owns it.
+    pub(super) fn set_target(&mut self, filename: String, path: PathBuf, owns_target: bool) {
+        self.current_filename = filename;
+        self.current_path = path;
+        self.owns_target = owns_target;
+    }
+
+    /// Switches to Downloading with this storage and metadata, and publishes the live totals.
+    pub(super) fn enter_downloading(&mut self, info: RemoteFileInfo, storage: Storage) {
         self.active_storage = Some(storage);
         self.file_info = Some(info);
         self.status = DownloadStatus::Downloading;
-        self.publish(total_size, 0, 0, None, resumable);
+        self.publish_live(self.range_download());
+    }
+
+    /// Spawns a worker for every unfinished chunk.
+    pub(super) fn spawn_pending_chunks(
+        &mut self,
+        total: u64,
+        validator: Option<&str>,
+        storage: &Storage,
+    ) {
+        for chunk in &mut self.active_chunks {
+            if chunk.is_done {
+                continue;
+            }
+            self.worker_handles.push(chunk.spawn(
+                self.session_id,
+                &self.current_url,
+                &self.client,
+                total,
+                validator,
+                storage,
+                &self.cancel_tx,
+                &self.worker_tx,
+            ));
+        }
     }
 
     /// Reports a target file that could not be prepared.
     pub(super) fn fail_target(&mut self, filename: String, path: PathBuf, source: &StorageError) {
-        self.current_filename = filename;
-        self.current_path = path;
-        self.owns_target = matches!(source, StorageError::CreatedFileInitialization(_));
+        self.set_target(
+            filename,
+            path,
+            matches!(source, StorageError::CreatedFileInitialization(_)),
+        );
         let message = match source {
             StorageError::Io(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 format!(
