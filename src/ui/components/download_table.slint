@@ -73,7 +73,7 @@ component RowInfoButton inherits Rectangle {
     background: info_touch.pressed ? Palette.control-pressed
         : (info_touch.has-hover ? Palette.control-filled : Palette.control-active);
     accessible-role: button;
-    accessible-label: "Hide details";
+    accessible-label: "File properties";
     accessible-action-default => { root.clicked(); }
 
     IconInfo {
@@ -297,6 +297,10 @@ export component DownloadTable inherits ScrollView {
     /// A sortable header was activated.
     callback sort_requested(int);
     callback save_column_widths();
+    /// The info button of a row asked for its file properties.
+    callback properties_requested(int);
+
+    public function focus-list() { list_focus.focus(); }
 
     content-width: max(self.visible-width, root.total_columns_width);
     content-height: self.visible-height;
@@ -498,9 +502,7 @@ export component DownloadTable inherits ScrollView {
                     height: parent.height;
                     is-selected: parent.is_selected;
                     is-expanded: parent.is_expanded;
-                    clicked => {
-                        root.expanded_row = (root.expanded_row == 0) ? -1 : 0;
-                    }
+                    clicked => { root.properties_requested(0); }
                 }
             }
 
@@ -562,9 +564,7 @@ export component DownloadTable inherits ScrollView {
                     height: parent.height;
                     is-selected: parent.is_selected;
                     is-expanded: parent.is_expanded;
-                    clicked => {
-                        root.expanded_row = (root.expanded_row == item.id) ? -1 : item.id;
-                    }
+                    clicked => { root.properties_requested(item.id); }
                 }
             }
         }

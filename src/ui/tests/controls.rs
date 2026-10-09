@@ -845,6 +845,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             save_path: file.path().with_file_name("video.mp4"),
             total_bytes: 10_000,
             completed_unix_ms: 1_700_000_000_000,
+            description: String::new(),
         };
         store.record(entry.clone())?;
         history.set_row_data(0, history_table_item(&SaveSettings::default(), &entry));

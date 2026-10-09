@@ -57,6 +57,7 @@ fn entry(id: i32, filename: &str, total_bytes: u64) -> HistoryEntry {
         save_path: PathBuf::from(format!("C:\\Users\\test\\Downloads\\{filename}")),
         total_bytes,
         completed_unix_ms: 1_700_000_000_000 + id as u64,
+        description: String::new(),
     }
 }
 
@@ -87,8 +88,8 @@ fn record_then_load_round_trips_every_field() {
     assert_eq!(store.entries(), std::slice::from_ref(&expected));
     assert_eq!(store.max_id(), Some(4));
     assert_eq!(store.next_id(), 5);
-    assert_eq!(store.path_for(4), Some(expected.save_path.as_path()));
-    assert_eq!(store.path_for(5), None);
+    assert_eq!(store.get(4), Some(&expected));
+    assert!(store.get(5).is_none());
     assert_eq!(file.line_count(), 2, "one header line and one record");
     assert!(file.read().starts_with(HISTORY_FORMAT_HEADER));
 }
@@ -363,4 +364,40 @@ fn remove_entry_updates_memory_and_disk() {
 
     // Non-existent id returns None
     assert_eq!(store.remove(99).unwrap(), None);
+}
+
+#[test]
+fn description_is_saved_cleared_and_rejected_for_unknown_ids() {
+    let file = TempFile::new("description");
+    let mut store = file.store();
+    store.record(entry(1, "a.zip", 1)).unwrap();
+    store.record(entry(2, "b.zip", 2)).unwrap();
+
+    store.set_description(2, "work backup").unwrap();
+    assert!(matches!(
+        store.set_description(99, "nobody"),
+        Err(HistoryError::NotFound(99))
+    ));
+    assert_eq!(file.store().get(2).unwrap().description, "work backup");
+    assert_eq!(file.store().get(1).unwrap().description, "");
+    assert_eq!(file.store().entries().len(), 2);
+
+    store.set_description(2, "").unwrap();
+    assert!(
+        !file.read().contains("description"),
+        "an empty description is not written"
+    );
+}
+
+#[test]
+fn records_written_before_descriptions_still_load() {
+    let file = TempFile::new("legacy-description");
+    file.write(&format!(
+        "{HISTORY_FORMAT_HEADER}\n{}\n",
+        r#"{"id":1,"url":"u","filename":"old.zip","save_path":"C:\\x","total_bytes":1,"completed_unix_ms":1}"#
+    ));
+
+    let store = file.store();
+    assert_eq!(store.entries().len(), 1);
+    assert_eq!(store.get(1).unwrap().description, "");
 }

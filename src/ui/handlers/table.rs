@@ -5,7 +5,6 @@ use crate::ui::state::AppState;
 use crate::ui::view::{MainWindow, Navigation, TableItem};
 use slint::ComponentHandle;
 use slint::Model;
-use std::path::Path;
 
 pub(crate) fn update_selection_state(window: &MainWindow, selected_id: i32) {
     if selected_id <= 0 {
@@ -143,7 +142,10 @@ pub(crate) fn bind_table_handlers(window: &MainWindow, state: &AppState) {
                 let snap = rx.borrow();
                 (snap.status == DownloadStatus::Completed).then(|| snap.save_path.clone())
             } else {
-                store.borrow().path_for(selected).map(Path::to_path_buf)
+                store
+                    .borrow()
+                    .get(selected)
+                    .map(|entry| entry.save_path.clone())
             };
             if let Some(path) = path {
                 open_file(&path);

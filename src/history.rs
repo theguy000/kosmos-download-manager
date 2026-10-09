@@ -6,7 +6,7 @@
 //! must not roam.
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use thiserror::Error;
 
 const HISTORY_FORMAT_HEADER: &str = "kosmos-history-v1";
@@ -19,6 +19,8 @@ pub enum HistoryError {
     Io(#[from] std::io::Error),
     #[error("history format error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("download {0} is no longer in the history")]
+    NotFound(i32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +32,9 @@ pub struct HistoryEntry {
     pub save_path: PathBuf,
     pub total_bytes: u64,
     pub completed_unix_ms: u64,
+    /// Free-form note from the File Properties dialog. Records written before it existed omit it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
 }
 
 /// The log is UTF-8 without a byte order mark, one JSON record per line, after the format
@@ -73,11 +78,19 @@ impl HistoryStore {
         self.max_id().map_or(1, |highest| highest.saturating_add(1))
     }
 
-    pub fn path_for(&self, id: i32) -> Option<&Path> {
-        self.entries
-            .iter()
+    pub fn get(&self, id: i32) -> Option<&HistoryEntry> {
+        self.entries.iter().find(|entry| entry.id == id)
+    }
+
+    /// Replaces the description of `id` and writes the log back.
+    pub fn set_description(&mut self, id: i32, description: &str) -> Result<(), HistoryError> {
+        let entry = self
+            .entries
+            .iter_mut()
             .find(|entry| entry.id == id)
-            .map(|entry| entry.save_path.as_path())
+            .ok_or(HistoryError::NotFound(id))?;
+        entry.description = description.to_string();
+        self.rewrite()
     }
 
     /// Keeps `entry` and writes the log back, keeping it at most [`MAX_HISTORY_ENTRIES`] long.
