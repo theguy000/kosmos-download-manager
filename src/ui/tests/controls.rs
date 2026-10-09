@@ -560,8 +560,8 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             "The reopened dialog keeps the last selected tab"
         );
         render();
-        // The strip is 528px wide inside the dialog's 16px padding and splits into seven 75.7px
-        // tabs, so tab 1 spans x = 92..165 of the dialog; the strip's vertical center is 68px in.
+        // The strip is 528px wide inside the dialog's 16px padding and splits into six 88px
+        // tabs, so tab 1 spans x = 104..192 of the dialog; the strip's vertical center is 68px in.
         let tab_1 = (options_left + 128.0, options_top + 68.0);
         click(tab_1.0, tab_1.1);
         assert_eq!(
@@ -603,13 +603,13 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
 
         click_options();
         render();
-        ui.set_options_selected_tab(6);
+        ui.set_options_selected_tab(5);
         window.dispatch_event(WindowEvent::KeyPressed {
             text: slint::platform::Key::RightArrow.into(),
         });
         assert_eq!(
             ui.get_options_selected_tab(),
-            6,
+            5,
             "The last options tab cannot move right"
         );
         window.dispatch_event(WindowEvent::KeyPressed {
@@ -642,7 +642,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         assert_eq!(ui.get_options_selected_tab(), 1);
         let probe = capture();
         assert!(
-            (164..=168)
+            (190..=194)
                 .any(|dx| pixel(&probe, options_left + dx as f32, options_top + 68.0) == ring),
             "Keyboard-focused tab draws focus ring on its right border without divider overlap"
         );

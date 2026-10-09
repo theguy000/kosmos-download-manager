@@ -35,7 +35,6 @@ export component OptionsDialog inherits Rectangle {
 
     private property <[string]> tab_names: [
         "General",
-        "File Types",
         "Save To",
         "Downloads",
         "Sound",
@@ -44,8 +43,8 @@ export component OptionsDialog inherits Rectangle {
     ];
 
     private property <bool> startup_stop: root.startup_option_visible && root.selected_tab == 0;
-    private property <bool> save_to_tab: root.selected_tab == 2;
-    private property <bool> downloads_tab: root.selected_tab == 3;
+    private property <bool> save_to_tab: root.selected_tab == 1;
+    private property <bool> downloads_tab: root.selected_tab == 2;
     private property <int> stop_count: root.startup_stop ? 4
         : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : (root.downloads_tab ? 4 : 3));
 
@@ -255,7 +254,7 @@ export component OptionsDialog inherits Rectangle {
                         }
 
                     VerticalLayout {
-                        visible: root.selected_tab == 2;
+                        visible: root.selected_tab == 1;
                         alignment: start;
                         padding: 16px;
                         spacing: 12px;
@@ -397,7 +396,7 @@ export component OptionsDialog inherits Rectangle {
                     }
 
                     VerticalLayout {
-                        visible: root.selected_tab == 3;
+                        visible: root.selected_tab == 2;
                         alignment: start;
                         padding: 16px;
                         spacing: 8px;

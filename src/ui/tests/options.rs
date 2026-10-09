@@ -85,7 +85,7 @@ fn options_downloads_tab_streams_slider_is_keyboard_reachable()
         window.dispatch_event(WindowEvent::KeyPressed { text });
     };
 
-    ui.set_options_selected_tab(3); // Downloads tab
+    ui.set_options_selected_tab(2); // Downloads tab
     ui.set_streams_count(8.0);
     ui.set_show_options_dialog(true);
     render();
@@ -99,7 +99,7 @@ fn options_downloads_tab_streams_slider_is_keyboard_reachable()
         9.0,
         "the slider owns the arrow keys"
     );
-    assert_eq!(ui.get_options_selected_tab(), 3);
+    assert_eq!(ui.get_options_selected_tab(), 2);
     press(slint::platform::Key::LeftArrow.into());
     press(slint::platform::Key::LeftArrow.into());
     assert_eq!(ui.get_streams_count(), 7.0);
@@ -131,14 +131,14 @@ fn options_save_to_tab_properties_and_navigation() -> Result<(), Box<dyn std::er
         window.dispatch_event(WindowEvent::KeyPressed { text });
     };
 
-    ui.set_options_selected_tab(2); // Save To tab
+    ui.set_options_selected_tab(1); // Save To tab
     set_option_dir(&ui, 0, "D:\\Downloads");
     set_option_dir(&ui, 1, "D:\\Downloads\\Compressed");
     set_option_dir(&ui, 5, "D:\\Downloads\\Video");
     ui.set_show_options_dialog(true);
     render();
 
-    assert_eq!(ui.get_options_selected_tab(), 2);
+    assert_eq!(ui.get_options_selected_tab(), 1);
     assert_eq!(ui.get_options_save_category(), 0);
     assert_eq!(option_dir(&ui, 0), "D:\\Downloads");
 
@@ -471,7 +471,7 @@ fn options_category_switch_preserves_other_category_dirs() -> Result<(), Box<dyn
         });
     };
 
-    ui.set_options_selected_tab(2);
+    ui.set_options_selected_tab(1);
     set_option_dir(&ui, 0, "D:\\Downloads");
     set_option_dir(&ui, 1, "D:\\Downloads\\Compressed");
     update_options_combo_items(&ui);
@@ -502,7 +502,7 @@ fn options_file_types_edit_each_category_separately() -> Result<(), Box<dyn std:
     ui.show()?;
     window.set_size(slint::PhysicalSize::new(960, 540));
 
-    ui.set_options_selected_tab(2);
+    ui.set_options_selected_tab(1);
     set_option_file_types(&ui, 1, "zip, rar");
     set_option_file_types(&ui, 5, "mp4");
     update_options_combo_items(&ui);
@@ -563,7 +563,7 @@ fn options_file_types_refresh_when_props_reset_after_open() -> Result<(), Box<dy
     ui.show()?;
     window.set_size(slint::PhysicalSize::new(960, 540));
 
-    ui.set_options_selected_tab(2);
+    ui.set_options_selected_tab(1);
     ui.set_options_save_category(1);
     set_option_file_types(&ui, 1, "zip");
     ui.set_show_options_dialog(true);
@@ -619,7 +619,7 @@ fn options_category_combobox_scroll_and_hover_interaction() -> Result<(), Box<dy
     ui.set_options_categories(slint::ModelRc::from(default_option_categories().as_slice()));
     update_options_combo_items(&ui);
 
-    ui.set_options_selected_tab(2);
+    ui.set_options_selected_tab(1);
     ui.set_options_save_category(0);
     ui.set_show_options_dialog(true);
     render();
@@ -775,7 +775,7 @@ fn options_category_actions_toggle_and_shortcuts() -> Result<(), Box<dyn std::er
     assert_eq!(combo_action(1), "close");
 
     // Open options dialog on Save To tab
-    ui.set_options_selected_tab(2);
+    ui.set_options_selected_tab(1);
     ui.set_options_save_category(0);
     ui.set_show_options_dialog(true);
     render();
