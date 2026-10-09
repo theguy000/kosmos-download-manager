@@ -1,7 +1,7 @@
-use super::duplicate::TargetMode;
 use super::metadata::{FetchInfoKind, spawn_info_fetch};
 use super::progress::drain_cancelled_progress;
 use super::resume::SavedDownload;
+use super::target::TargetMode;
 use super::{CoordinatorError, Session, calculate_downloaded, uses_range_workers};
 use crate::engine::model::{DownloadAction, DownloadStatus};
 use std::path::PathBuf;

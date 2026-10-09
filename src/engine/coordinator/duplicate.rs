@@ -1,58 +1,13 @@
 use super::identity::verify_saved_region;
-use super::metadata::create_collision_free;
 use super::resume::seed_existing_prefix;
 use super::scheduler::ActiveChunk;
+use super::target::{ExistingFile, TargetError, TargetMode, create_target};
 use super::{Session, calculate_downloaded, uses_range_workers};
 use crate::client::RemoteFileInfo;
 use crate::engine::chunks::ChunkRange;
 use crate::engine::model::{DownloadStatus, DuplicateChoice, DuplicatePrompt};
 use crate::storage::{Storage, StorageError};
-use std::path::{Path, PathBuf};
-
-/// How the engine picks the target file of a download.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum TargetMode {
-    /// Ask the user before touching a file that already exists.
-    Ask,
-    /// Append a numeric suffix to the server filename.
-    Numbered,
-    /// Reuse the target path, discarding existing contents.
-    Overwrite,
-}
-
-/// Why the engine could not prepare a target file.
-pub(super) enum TargetError {
-    /// A file is already there and the user has to decide what happens to it.
-    Existing {
-        filename: String,
-        path: PathBuf,
-        bytes: u64,
-    },
-    Storage {
-        filename: String,
-        path: PathBuf,
-        source: StorageError,
-    },
-}
-
-/// The file on disk a duplicate prompt is about.
-pub(super) struct ExistingFile {
-    pub(super) filename: String,
-    pub(super) path: PathBuf,
-    pub(super) bytes: u64,
-}
-
-impl ExistingFile {
-    fn prompt(&self, session_id: u64, url: String) -> DuplicatePrompt {
-        DuplicatePrompt {
-            session_id,
-            url,
-            filename: self.filename.clone(),
-            existing_bytes: Some(self.bytes),
-            link_duplicate: false,
-        }
-    }
-}
+use std::path::PathBuf;
 
 pub(super) struct PendingDuplicate {
     pub(super) prompt: DuplicatePrompt,
@@ -73,89 +28,6 @@ enum DuplicateRequest {
         info: RemoteFileInfo,
         existing: ExistingFile,
     },
-}
-
-/// Directory targets get the server filename; everything else is an explicit file path.
-fn is_directory_target(save_path: &Path) -> bool {
-    let display = save_path.to_string_lossy();
-    save_path.is_dir()
-        || save_path.extension().is_none()
-        || display.ends_with('/')
-        || display.ends_with('\\')
-}
-
-/// Creates the target file for `mode`, never replacing a file the user did not confirm.
-pub(super) fn create_target(
-    save_path: &Path,
-    info_filename: &str,
-    total_size: Option<u64>,
-    mode: TargetMode,
-) -> Result<(String, PathBuf, Storage), TargetError> {
-    let (directory, filename) = if is_directory_target(save_path) {
-        (save_path.to_path_buf(), info_filename.to_string())
-    } else {
-        let filename = save_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(info_filename)
-            .to_string();
-        (
-            save_path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default(),
-            filename,
-        )
-    };
-
-    match mode {
-        TargetMode::Ask => {
-            let path = directory.join(&filename);
-            match Storage::create_new(&path, total_size) {
-                Ok(storage) => Ok((filename, path, storage)),
-                Err(StorageError::Io(error))
-                    if error.kind() == std::io::ErrorKind::AlreadyExists =>
-                {
-                    match std::fs::metadata(&path) {
-                        Ok(metadata) => Err(TargetError::Existing {
-                            filename,
-                            path,
-                            bytes: metadata.len(),
-                        }),
-                        Err(source) => Err(TargetError::Storage {
-                            filename,
-                            path,
-                            source: StorageError::Io(source),
-                        }),
-                    }
-                }
-                Err(source) => Err(TargetError::Storage {
-                    filename,
-                    path,
-                    source,
-                }),
-            }
-        }
-        TargetMode::Numbered => match create_collision_free(&directory, &filename, total_size) {
-            Ok(created) => Ok(created),
-            Err((filename, path, source)) => Err(TargetError::Storage {
-                filename,
-                path,
-                source,
-            }),
-        },
-        TargetMode::Overwrite => {
-            let path = directory.join(&filename);
-            match Storage::create_or_open(&path, total_size, true) {
-                Ok(storage) => Ok((filename, path, storage)),
-                Err(source) => Err(TargetError::Storage {
-                    filename,
-                    path,
-                    source,
-                }),
-            }
-        }
-    }
 }
 
 /// Marks every byte of a file that is already on disk as downloaded.
@@ -411,21 +283,8 @@ impl Session {
 
     /// Accepts an on-disk file that already holds the full remote file.
     async fn adopt_complete(&mut self, info: RemoteFileInfo, existing: ExistingFile, total: u64) {
-        let opened = tokio::task::spawn_blocking({
-            let path = existing.path.clone();
-            move || Storage::create_or_open(&path, Some(total), false)
-        })
-        .await;
-        let storage = match opened {
-            Ok(Ok(storage)) => storage,
-            Ok(Err(error)) => {
-                self.fail_existing(&existing, &error.to_string());
-                return;
-            }
-            Err(error) => {
-                self.fail_existing(&existing, &format!("it could not be opened: {error}"));
-                return;
-            }
+        let Some(storage) = self.open_existing(&existing, total).await else {
+            return;
         };
 
         // A full-size file is only complete once its bytes match the remote file.
@@ -465,21 +324,8 @@ impl Session {
         total: u64,
         num_chunks: usize,
     ) {
-        let opened = tokio::task::spawn_blocking({
-            let path = existing.path.clone();
-            move || Storage::create_or_open(&path, Some(total), false)
-        })
-        .await;
-        let storage = match opened {
-            Ok(Ok(storage)) => storage,
-            Ok(Err(error)) => {
-                self.fail_existing(&existing, &error.to_string());
-                return;
-            }
-            Err(error) => {
-                self.fail_existing(&existing, &format!("it could not be opened: {error}"));
-                return;
-            }
+        let Some(storage) = self.open_existing(&existing, total).await else {
+            return;
         };
 
         if let Err(reason) = self
@@ -520,6 +366,27 @@ impl Session {
             None,
             true,
         );
+    }
+
+    /// Opens an on-disk file at its remote size without truncating it.
+    /// Reports the failure and returns None when it cannot be opened.
+    async fn open_existing(&mut self, existing: &ExistingFile, total: u64) -> Option<Storage> {
+        let opened = tokio::task::spawn_blocking({
+            let path = existing.path.clone();
+            move || Storage::create_or_open(&path, Some(total), false)
+        })
+        .await;
+        match opened {
+            Ok(Ok(storage)) => Some(storage),
+            Ok(Err(error)) => {
+                self.fail_existing(existing, &error.to_string());
+                None
+            }
+            Err(error) => {
+                self.fail_existing(existing, &format!("it could not be opened: {error}"));
+                None
+            }
+        }
     }
 
     /// Samples the first and last saved bytes of an existing file against the remote file.

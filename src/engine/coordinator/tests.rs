@@ -154,7 +154,7 @@ fn dynamic_partitions_preserve_progress_and_resume_coverage() {
 
 #[test]
 fn test_next_numbered_filename() {
-    use super::metadata::next_numbered_filename;
+    use super::target::next_numbered_filename;
 
     assert_eq!(
         next_numbered_filename("windowsdesktop-runtime-8.0.31-win-x64.exe", 1),
@@ -176,7 +176,7 @@ fn test_next_numbered_filename() {
 
 #[test]
 fn collision_free_creation_returns_the_candidate_path() {
-    use super::metadata::create_collision_free;
+    use super::target::create_collision_free;
 
     let dir = std::env::temp_dir().join(format!(
         "kosmos-collision-{}-{:?}",

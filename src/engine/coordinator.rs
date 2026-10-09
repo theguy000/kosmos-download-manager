@@ -8,6 +8,7 @@ mod resume;
 mod scheduler;
 mod snapshot;
 mod speed;
+mod target;
 #[cfg(test)]
 mod tests;
 

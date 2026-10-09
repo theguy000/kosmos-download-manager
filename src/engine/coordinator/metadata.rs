@@ -1,18 +1,14 @@
-use super::duplicate::{ExistingFile, TargetError, TargetMode, create_target};
 use super::resume::{SavedDownload, resume_chunks_are_valid};
 use super::scheduler::{MAX_CHUNK_RETRIES, retry_delay, spawn_download_workers};
+use super::target::{ExistingFile, TargetError, TargetMode, create_target};
 use super::{CoordinatorError, Session, calculate_downloaded, uses_range_workers};
 use crate::client::{HttpClient, RemoteFileInfo, is_strong_etag};
 use crate::engine::model::DownloadStatus;
 use crate::engine::worker::WorkerError;
 use crate::storage::{Storage, StorageError};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
-
-/// Upper bound on automatic `name_N` collision renames before failing.
-/// ponytail: circuit breaker; a normal filesystem finds a free name on the first try.
-const MAX_AUTO_RENAME_ATTEMPTS: u32 = 10_000;
 
 pub(super) enum FetchInfoKind {
     Start {
@@ -333,48 +329,5 @@ impl Session {
             _ => source.to_string(),
         };
         self.fail_early(message);
-    }
-}
-
-pub(super) fn create_collision_free(
-    save_path: &Path,
-    info_filename: &str,
-    total_size: Option<u64>,
-) -> Result<(String, PathBuf, Storage), (String, PathBuf, StorageError)> {
-    let mut candidate_name = info_filename.to_string();
-    let mut candidate_path = save_path.join(&candidate_name);
-    let mut index = 0;
-    loop {
-        if index > 0 {
-            candidate_name = next_numbered_filename(info_filename, index);
-            candidate_path = save_path.join(&candidate_name);
-        }
-        match Storage::create_new(&candidate_path, total_size) {
-            Ok(storage) => return Ok((candidate_name, candidate_path, storage)),
-            Err(StorageError::Io(err)) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                index += 1;
-                if index >= MAX_AUTO_RENAME_ATTEMPTS {
-                    let err = std::io::Error::new(
-                        std::io::ErrorKind::AlreadyExists,
-                        format!("no available filename after {MAX_AUTO_RENAME_ATTEMPTS} attempts"),
-                    );
-                    return Err((candidate_name, candidate_path, StorageError::Io(err)));
-                }
-            }
-            Err(err) => return Err((candidate_name, candidate_path, err)),
-        }
-    }
-}
-
-pub(super) fn next_numbered_filename(original_name: &str, index: u32) -> String {
-    let path = Path::new(original_name);
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(original_name);
-    let ext = path.extension().and_then(|e| e.to_str());
-    match ext {
-        Some(ext) => format!("{stem}_{index}.{ext}"),
-        None => format!("{stem}_{index}"),
     }
 }
