@@ -238,7 +238,6 @@ export component MainWindow inherits Window {
     if root.show_add_dialog: AddDownloadDialog {
         url-text <=> root.url_text;
         dest-dir-text <=> root.dest_dir_text;
-        streams-count <=> root.streams_count;
         browse-folder => { root.browse_folder(); }
         start-download => { root.start_download(); }
         dismiss(from_keyboard) => {
@@ -253,6 +252,7 @@ export component MainWindow inherits Window {
         startup-option-visible: root.startup_option_visible;
         save-to-category <=> root.options_save_category;
         use-kdm-folder <=> root.options_use_kdm_folder;
+        streams-count <=> root.streams_count;
         categories <=> root.options_categories;
         combo-items: root.options_combo_items;
         toggle-category-list(cat) => { root.toggle_options_category_list(cat); }

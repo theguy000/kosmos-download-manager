@@ -611,6 +611,8 @@ export component DialogInput inherits Rectangle {
 
 export component DialogSlider inherits Rectangle {
     in-out property <float> value;
+    // Keep in step with MAX_STREAMS in src/settings/mod.rs.
+    private property <float> maximum: 40;
     out property <bool> has_keyboard_focus: slider.has-focus;
     public function take-focus() { slider.focus(); }
     height: 28px;
@@ -623,13 +625,13 @@ export component DialogSlider inherits Rectangle {
         background: Palette.control-strong;
         Rectangle {
             x: 0px;
-            width: parent.width * (root.value - 1) / 15;
+            width: parent.width * (root.value - 1) / (root.maximum - 1);
             background: Palette.accent;
         }
     }
     // Drawn outside the handle so the ring stays visible on the accent-filled handle.
     if slider.has-focus: Rectangle {
-        x: 2px + (parent.width - 20px) * (root.value - 1) / 15;
+        x: 2px + (parent.width - 20px) * (root.value - 1) / (root.maximum - 1);
         y: (parent.height - self.height) / 2;
         width: 16px; height: 20px;
         background: transparent;
@@ -637,7 +639,7 @@ export component DialogSlider inherits Rectangle {
         border-color: FocusStyle.ring;
     }
     Rectangle {
-        x: 4px + (parent.width - 20px) * (root.value - 1) / 15;
+        x: 4px + (parent.width - 20px) * (root.value - 1) / (root.maximum - 1);
         y: (parent.height - self.height) / 2;
         width: 12px; height: 16px;
         background: Palette.accent;
@@ -646,10 +648,10 @@ export component DialogSlider inherits Rectangle {
     slider := Slider {
         width: parent.width; height: parent.height;
         opacity: 0;
-        minimum: 1; maximum: 16; step: 1;
+        minimum: 1; maximum: root.maximum; step: 1;
         value <=> root.value;
         changed(value) => { root.value = Math.round(value); }
-        accessible-label: "Streams";
+        accessible-label: "Connections";
     }
 }
 

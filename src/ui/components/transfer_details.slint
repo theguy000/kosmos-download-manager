@@ -29,7 +29,7 @@ export component StatusFooter inherits Rectangle {
         Rectangle {}
 
         Text {
-            text: "Transfer: " + (root.is_downloading ? root.active_transfer_rate : "0 KB/s") + " | Streams: " + Math.round(root.streams_count);
+            text: "Transfer: " + (root.is_downloading ? root.active_transfer_rate : "0 KB/s") + " | Connections: " + Math.round(root.streams_count);
             font-size: 11px;
             color: Palette.text-faint;
             vertical-alignment: center;

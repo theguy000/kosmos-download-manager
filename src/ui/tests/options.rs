@@ -68,6 +68,53 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn options_downloads_tab_streams_slider_is_keyboard_reachable()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    ui.set_options_selected_tab(3); // Downloads tab
+    ui.set_streams_count(8.0);
+    ui.set_show_options_dialog(true);
+    render();
+
+    // Tab stops on this tab: tab strip, streams slider, OK, Cancel.
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::RightArrow.into());
+    assert_eq!(
+        ui.get_streams_count(),
+        9.0,
+        "the slider owns the arrow keys"
+    );
+    assert_eq!(ui.get_options_selected_tab(), 3);
+    press(slint::platform::Key::LeftArrow.into());
+    press(slint::platform::Key::LeftArrow.into());
+    assert_eq!(ui.get_streams_count(), 7.0);
+
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Return.into());
+    assert!(
+        !ui.get_show_options_dialog(),
+        "the slider is followed by OK, which Return activates"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn options_save_to_tab_properties_and_navigation() -> Result<(), Box<dyn std::error::Error>> {
     let (window, _clipboard) = install_test_platform()?;
     let ui = MainWindow::new()?;

@@ -115,7 +115,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         render();
 
         let left = width as f32 / 2.0 - 230.0;
-        let top = height as f32 / 2.0 - 124.0;
+        let top = height as f32 / 2.0 - 104.0;
         ui.set_show_add_dialog(true);
         ui.set_url_text("".into());
         ui.set_dest_dir_text(
@@ -124,23 +124,12 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
                 .into_owned()
                 .into(),
         );
-        ui.set_streams_count(8.0);
         render();
-        assert_eq!(ui.get_streams_count(), 8.0);
-        click(left + 395.0, top + 210.0);
+        click(left + 395.0, top + 170.0);
         assert!(
             ui.get_show_add_dialog(),
             "Empty URL keeps Download disabled"
         );
-
-        click(left + 84.0, top + 166.0);
-        assert_eq!(ui.get_streams_count(), 1.0);
-        window.dispatch_event(WindowEvent::KeyPressed {
-            text: slint::platform::Key::RightArrow.into(),
-        });
-        assert_eq!(ui.get_streams_count(), 2.0);
-        click(left + 366.0, top + 166.0);
-        assert_eq!(ui.get_streams_count(), 16.0);
 
         click(left + 120.0, top + 74.0);
         window.dispatch_event(WindowEvent::KeyPressed {
@@ -234,14 +223,14 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         window.dispatch_event(WindowEvent::KeyPressed { text: " ".into() });
         assert_eq!(browsed.get(), 2, "Browse supports pointer and keyboard");
         render();
-        click(left + 310.0, top + 210.0);
+        click(left + 310.0, top + 170.0);
         assert!(!ui.get_show_add_dialog());
         ui.set_show_add_dialog(true);
         let started = Rc::new(std::cell::Cell::new(false));
         let flag = started.clone();
         ui.on_start_download(move || flag.set(true));
         render();
-        click(left + 395.0, top + 210.0);
+        click(left + 395.0, top + 170.0);
         assert!(started.get());
         assert!(!ui.get_show_add_dialog());
         render();
@@ -683,8 +672,8 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         assert!(ui.get_show_add_dialog(), "Add URL button opens dialog");
         render();
         // Tab rotates within AddDownloadDialog across its focus stops.
-        // With empty URL, Download is disabled, so Cancel (4) wraps directly to URL (0).
-        for _ in 0..4 {
+        // With empty URL, Download is disabled, so Cancel (3) wraps directly to URL (0).
+        for _ in 0..3 {
             window.dispatch_event(WindowEvent::KeyPressed {
                 text: slint::platform::Key::Tab.into(),
             });
@@ -697,7 +686,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             ui.get_show_add_dialog(),
             "Tab from Cancel keeps Add Download dialog open and focused"
         );
-        // Shift+Tab from URL (0) should wrap backward to Cancel (4), skipping disabled Download.
+        // Shift+Tab from URL (0) should wrap backward to Cancel (3), skipping disabled Download.
         // Return then activates Cancel, proving the backward wrap reached the Cancel button
         // (with the URL empty, Return on any other stop leaves the dialog open).
         window.dispatch_event(WindowEvent::KeyPressed {
@@ -735,7 +724,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         assert!(ui.get_url_text().is_empty(), "Add URL opens with empty URL");
         ui.set_url_text("https://example.com/file.zip".into());
         render();
-        for _ in 0..5 {
+        for _ in 0..4 {
             window.dispatch_event(WindowEvent::KeyPressed {
                 text: slint::platform::Key::Tab.into(),
             });
@@ -747,7 +736,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
         });
         let pixel = |x: f32, y: f32| probe[(y as usize) * (width as usize) + (x as usize)];
         assert_eq!(
-            pixel(left + 350.0, top + 210.0),
+            pixel(left + 350.0, top + 170.0),
             slint::Rgb8Pixel {
                 r: 0x8b,
                 g: 0xa9,
@@ -756,7 +745,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             "Focused Download button draws the focus ring outside its accent fill"
         );
         assert_eq!(
-            pixel(left + 351.0, top + 210.0),
+            pixel(left + 351.0, top + 170.0),
             slint::Rgb8Pixel {
                 r: 0x1f,
                 g: 0x1f,

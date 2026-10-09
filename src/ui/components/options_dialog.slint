@@ -5,6 +5,7 @@ import {
     DialogCheckBox,
     DialogComboBox,
     DialogInput,
+    DialogSlider,
     FocusStyle,
     PointerButton,
 } from "controls.slint";
@@ -30,6 +31,8 @@ export component OptionsDialog inherits Rectangle {
     in-out property <[CategoryOption]> categories: [];
     in property <[ComboItem]> combo_items: [];
 
+    in-out property <float> streams_count: 8;
+
     private property <[string]> tab_names: [
         "General",
         "File Types",
@@ -42,8 +45,9 @@ export component OptionsDialog inherits Rectangle {
 
     private property <bool> startup_stop: root.startup_option_visible && root.selected_tab == 0;
     private property <bool> save_to_tab: root.selected_tab == 2;
+    private property <bool> downloads_tab: root.selected_tab == 3;
     private property <int> stop_count: root.startup_stop ? 4
-        : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : 3);
+        : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : (root.downloads_tab ? 4 : 3));
 
     private property <string> current_category_name:
         root.categories.length > root.save_to_category
@@ -58,8 +62,9 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab && reset_button.has-keyboard-focus ? 4
         : (root.save_to_tab && root.save_to_category != 0 && types_input.has-keyboard_focus ? 5
         : (root.save_to_tab && kdm_box.has-keyboard-focus ? (root.save_to_category == 0 ? 5 : 6)
+        : (root.downloads_tab && streams_slider.has_keyboard_focus ? 1
         : (ok_button.has-keyboard-focus ? root.stop_count - 2
-        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1)))))))));
+        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))));
 
     private property <bool> keyboard_focused: false;
 
@@ -87,6 +92,7 @@ export component OptionsDialog inherits Rectangle {
         else if root.save_to_tab && index == 4 { reset_button.take-focus(); }
         else if root.save_to_tab && root.save_to_category != 0 && index == 5 { types_input.take-focus(); }
         else if root.save_to_tab && ((root.save_to_category == 0 && index == 5) || (root.save_to_category != 0 && index == 6)) { kdm_box.take-focus(); }
+        else if root.downloads_tab && index == 1 { streams_slider.take-focus(); }
         else if index == root.stop_count - 2 { ok_button.take-focus(); }
         else { cancel_button.take-focus(); }
     }
@@ -386,6 +392,26 @@ export component OptionsDialog inherits Rectangle {
                             text: "Route downloads to KDM folder";
                             changed checked => {
                                 root.toggle_kdm_folder(self.checked);
+                            }
+                        }
+                    }
+
+                    VerticalLayout {
+                        visible: root.selected_tab == 3;
+                        alignment: start;
+                        padding: 16px;
+                        spacing: 8px;
+
+                        HorizontalLayout {
+                            spacing: 12px;
+
+                            Text { text: "Connections:"; width: 85px; font-size: 12px; color: Palette.text-muted; vertical-alignment: center; }
+                            streams_slider := DialogSlider {
+                                value <=> root.streams_count;
+                            }
+                            Text {
+                                text: Math.round(root.streams_count) + " per download";
+                                width: 100px; font-size: 12px; color: Palette.text-muted; vertical-alignment: center;
                             }
                         }
                     }

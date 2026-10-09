@@ -140,6 +140,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 let settings = save_settings.borrow();
                 load_options_categories(&window, &settings);
                 window.set_options_use_kdm_folder(settings.use_kdm_folder);
+                window.set_streams_count(f32::from(settings.streams));
             }
 
             let window_weak = window_weak.clone();
@@ -292,6 +293,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 let mut new_settings = SaveSettings {
                     default_dir,
                     use_kdm_folder: use_kdm,
+                    streams: window.get_streams_count().round() as u8,
                     ..Default::default()
                 };
                 for option in &categories {

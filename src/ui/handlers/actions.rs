@@ -79,7 +79,7 @@ pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
             if let Some(window) = window_weak.upgrade() {
                 let url = window.get_url_text().to_string().trim().to_string();
                 let dest = window.get_dest_dir_text().to_string().trim().to_string();
-                let streams = window.get_streams_count().round() as usize;
+                let streams = usize::from(save_settings.borrow().streams);
 
                 if !url.is_empty() {
                     let save_path = if dest.is_empty() {
@@ -93,7 +93,7 @@ pub(crate) fn bind_action_handlers(window: &MainWindow, state: &AppState) {
                         DownloadAction::Start {
                             url,
                             save_path,
-                            num_chunks: streams.clamp(1, 16),
+                            num_chunks: streams,
                         },
                     ) {
                         window.set_url_text("".into());

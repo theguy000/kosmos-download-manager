@@ -30,6 +30,7 @@ pub fn run_app(
             .into(),
     );
     main_window.set_startup_option_visible(cfg!(windows));
+    main_window.set_streams_count(f32::from(state.save_settings.borrow().streams));
     update_sidebar_categories(&main_window, &state.save_settings.borrow());
 
     if let Some(url) = initial_url {

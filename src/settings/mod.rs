@@ -13,9 +13,19 @@ use std::path::{Path, PathBuf};
 
 const SETTINGS_FILE_NAME: &str = "save_settings.json";
 
+/// Max parallel connections per download; keep in step with the slider in `controls.slint`.
+pub const MAX_STREAMS: u8 = 40;
+
+const fn default_streams() -> u8 {
+    8
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
+    /// Parallel connections used by new downloads, kept within `1..=MAX_STREAMS` on load.
+    #[serde(default = "default_streams")]
+    pub streams: u8,
     #[serde(default)]
     pub use_kdm_folder: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -33,6 +43,7 @@ impl Default for SaveSettings {
     fn default() -> Self {
         Self {
             default_dir: default_download_directory(),
+            streams: default_streams(),
             use_kdm_folder: false,
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
@@ -266,6 +277,7 @@ impl SaveSettings {
             .category_dirs
             .retain(|_, path| !path.as_os_str().is_empty());
         settings.disabled_categories.remove(&Category::General);
+        settings.streams = settings.streams.clamp(1, MAX_STREAMS);
         Some(settings)
     }
 
@@ -301,6 +313,7 @@ mod tests {
 
         let original = SaveSettings {
             default_dir: PathBuf::from("D:\\Downloads"),
+            streams: 12,
             use_kdm_folder: false,
             category_dirs: BTreeMap::from([
                 (
@@ -319,6 +332,24 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_streams_default_and_clamp_on_load() {
+        let path = std::env::temp_dir().join(format!("kosmos_streams_{}.json", std::process::id()));
+        for (extra, expected) in [
+            ("", 8),
+            (r#","streams":0"#, 1),
+            (r#","streams":200"#, MAX_STREAMS),
+        ] {
+            std::fs::write(
+                &path,
+                format!(r#"{{"default_dir":"D:\\Downloads"{extra}}}"#),
+            )
+            .unwrap();
+            assert_eq!(SaveSettings::load_from(&path).unwrap().streams, expected);
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
