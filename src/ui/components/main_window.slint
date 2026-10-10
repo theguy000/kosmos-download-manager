@@ -32,6 +32,7 @@ export component MainWindow inherits Window {
     in-out property <bool> show_options_dialog: false;
     in-out property <int> options_selected_tab: 0;
     in-out property <bool> options_launch_on_startup: false;
+    in-out property <bool> options_ask_before_delete: true;
     in-out property <[CategoryOption]> options_categories: [];
     in property <[ComboItem]> options_combo_items: [];
     in-out property <int> options_save_category: 0;
@@ -260,6 +261,7 @@ export component MainWindow inherits Window {
     if root.show_options_dialog: OptionsDialog {
         selected-tab <=> root.options_selected_tab;
         launch-on-startup <=> root.options_launch_on_startup;
+        ask-before-delete <=> root.options_ask_before_delete;
         startup-option-visible: root.startup_option_visible;
         browser-integration <=> root.options_browser_integration;
         save-to-category <=> root.options_save_category;

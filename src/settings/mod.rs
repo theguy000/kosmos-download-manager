@@ -24,6 +24,10 @@ const fn default_browser_integration() -> bool {
     true
 }
 
+const fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
@@ -43,6 +47,9 @@ pub struct SaveSettings {
     pub disabled_categories: BTreeSet<Category>,
     #[serde(default = "default_browser_integration")]
     pub browser_integration: bool,
+    /// Ask before deleting a download. Off removes it from the list and keeps every file.
+    #[serde(default = "default_true")]
+    pub ask_before_delete: bool,
 }
 
 impl Default for SaveSettings {
@@ -55,6 +62,7 @@ impl Default for SaveSettings {
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
             browser_integration: default_browser_integration(),
+            ask_before_delete: true,
         }
     }
 }
@@ -332,6 +340,7 @@ mod tests {
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
             browser_integration: true,
+            ask_before_delete: false,
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -377,6 +386,21 @@ mod tests {
         assert!(!SaveSettings::load_from(&path).unwrap().browser_integration);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_ask_before_delete_defaults_on_for_old_settings_files() {
+        let path = std::env::temp_dir().join(format!("kosmos_confirm_{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
+        assert!(SaveSettings::load_from(&path).unwrap().ask_before_delete);
+        std::fs::write(
+            &path,
+            r#"{"default_dir":"D:\\Downloads","ask_before_delete":false}"#,
+        )
+        .unwrap();
+        assert!(!SaveSettings::load_from(&path).unwrap().ask_before_delete);
+        let _ = std::fs::remove_file(&path);
+        assert!(SaveSettings::default().ask_before_delete);
     }
 
     #[test]
