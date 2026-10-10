@@ -13,6 +13,18 @@ use std::path::PathBuf;
 /// Blocks sampled when an existing file is adopted, so requests do not grow with file size.
 const ADOPT_SAMPLES: u64 = 32;
 
+/// Start offsets of the blocks sampled in a `bytes`-long file, first and last included.
+/// Files of up to `ADOPT_SAMPLES` blocks get one block per `OVERLAP_BYTES`, so they are covered whole.
+fn sample_offsets(bytes: u64) -> Vec<u64> {
+    let span = bytes - bytes.min(OVERLAP_BYTES);
+    let samples = ADOPT_SAMPLES.min(bytes.div_ceil(OVERLAP_BYTES));
+    let steps = samples.saturating_sub(1).max(1);
+    // Split so `span * i` cannot overflow u64.
+    (0..samples)
+        .map(|i| span / steps * i + span % steps * i / steps)
+        .collect()
+}
+
 pub(super) struct PendingDuplicate {
     pub(super) prompt: DuplicatePrompt,
     request: DuplicateRequest,
@@ -366,8 +378,8 @@ impl Session {
         }
     }
 
-    /// Samples evenly spaced blocks of an existing file, including the first and last, against
-    /// the remote file. Files of up to `ADOPT_SAMPLES` blocks are checked whole.
+    /// Samples evenly spaced `OVERLAP_BYTES`-sized blocks of an existing file, including the first
+    /// and last, against the remote file. Files of up to `ADOPT_SAMPLES` blocks are checked whole.
     /// This consistency heuristic covers data the engine did not write itself.
     pub(super) async fn verify_existing_bytes(
         &mut self,
@@ -386,13 +398,7 @@ impl Session {
         let url = self.current_url.clone();
         let validator = info.resume_validator().map(str::to_owned);
         let sample_len = bytes.min(OVERLAP_BYTES);
-        let span = bytes - sample_len;
-        let steps = ADOPT_SAMPLES - 1;
-        let mut offsets: Vec<u64> = (0..ADOPT_SAMPLES)
-            .map(|i| span / steps * i + span % steps * i / steps)
-            .collect();
-        offsets.dedup();
-        for offset in offsets {
+        for offset in sample_offsets(bytes) {
             verify_saved_region(
                 &client,
                 &url,
@@ -417,5 +423,44 @@ impl Session {
             "Cannot use existing file {}: {reason}. Choose overwrite or a numbered copy instead",
             existing.path.display()
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_offsets_include_first_and_last_and_stay_bounded() {
+        let block = OVERLAP_BYTES;
+        // 1_000_003 leaves a span that 31 does not divide; u64::MAX checks the arithmetic.
+        let sizes = [
+            1,
+            block - 1,
+            block,
+            block + 1,
+            2 * block + 1,
+            ADOPT_SAMPLES * block,
+            ADOPT_SAMPLES * block + 1,
+            1_000_003,
+            u64::MAX,
+        ];
+        for bytes in sizes {
+            let offsets = sample_offsets(bytes);
+            assert_eq!(offsets[0], 0, "{bytes}");
+            assert_eq!(offsets.last(), Some(&(bytes - bytes.min(block))), "{bytes}");
+            assert!(offsets.windows(2).all(|pair| pair[0] <= pair[1]), "{bytes}");
+            assert_eq!(
+                offsets.len() as u64,
+                ADOPT_SAMPLES.min(bytes.div_ceil(block)),
+                "{bytes}"
+            );
+            if bytes <= ADOPT_SAMPLES * block {
+                assert!(
+                    offsets.windows(2).all(|pair| pair[1] - pair[0] <= block),
+                    "{bytes} must be covered whole"
+                );
+            }
+        }
     }
 }
