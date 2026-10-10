@@ -23,6 +23,8 @@ const fn default_streams() -> u8 {
 /// Choices for "Keep at most N downloads", smallest first. Keep in step with the combo in
 /// `options_dialog.slint`; a saved value outside this range is clamped on load.
 const HISTORY_LIMITS: [usize; 5] = [100, 250, 500, 1_000, 5_000];
+/// Position of the default limit in [`HISTORY_LIMITS`], shown for a value that is not a choice.
+const DEFAULT_HISTORY_LIMIT_INDEX: i32 = 3;
 
 const fn default_history_limit() -> usize {
     crate::history::MAX_HISTORY_ENTRIES
@@ -275,14 +277,12 @@ impl SaveSettings {
         (path != Self::default_subfolder(default_dir, category)).then_some(path)
     }
 
-    /// Position of `history_limit` in [`HISTORY_LIMITS`], rounding up to the next choice.
+    /// Position of `history_limit` in [`HISTORY_LIMITS`], or of the default when it is not a choice.
     pub fn history_limit_index(&self) -> i32 {
-        let last = HISTORY_LIMITS.len() - 1;
-        let index = HISTORY_LIMITS
-            .iter()
-            .position(|&limit| limit >= self.history_limit)
-            .unwrap_or(last);
-        i32::try_from(index).unwrap_or_default()
+        (0..)
+            .zip(HISTORY_LIMITS)
+            .find_map(|(index, limit)| (limit == self.history_limit).then_some(index))
+            .unwrap_or(DEFAULT_HISTORY_LIMIT_INDEX)
     }
 
     /// The limit behind a combo position, or the default for a position that is not a choice.
@@ -337,6 +337,7 @@ fn settings_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::TempFile;
 
     #[test]
     fn test_save_settings_round_trip() {
@@ -387,8 +388,7 @@ mod tests {
 
     #[test]
     fn history_limit_defaults_clamps_and_maps_to_the_combo() {
-        let path =
-            std::env::temp_dir().join(format!("kosmos_history_limit_{}.json", std::process::id()));
+        let file = TempFile::new("history-limit");
         for (extra, expected) in [
             ("", 1_000),
             (r#","history_limit":0"#, 100),
@@ -396,18 +396,18 @@ mod tests {
             (r#","history_limit":99999"#, 5_000),
         ] {
             std::fs::write(
-                &path,
+                file.path(),
                 format!(r#"{{"default_dir":"D:\\Downloads"{extra}}}"#),
             )
             .unwrap();
             assert_eq!(
-                SaveSettings::load_from(&path).unwrap().history_limit,
+                SaveSettings::load_from(file.path()).unwrap().history_limit,
                 expected
             );
         }
-        let _ = std::fs::remove_file(&path);
 
         assert_eq!(SaveSettings::default().history_limit, 1_000);
+        assert_eq!(HISTORY_LIMITS[DEFAULT_HISTORY_LIMIT_INDEX as usize], 1_000);
         for (index, limit) in HISTORY_LIMITS.into_iter().enumerate() {
             let settings = SaveSettings {
                 history_limit: limit,
@@ -416,11 +416,6 @@ mod tests {
             assert_eq!(settings.history_limit_index(), index as i32);
             assert_eq!(SaveSettings::history_limit_for_index(index as i32), limit);
         }
-        let between = SaveSettings {
-            history_limit: 777,
-            ..Default::default()
-        };
-        assert_eq!(between.history_limit_index(), 3, "rounds up to 1,000");
         assert_eq!(SaveSettings::history_limit_for_index(-1), 1_000);
         assert_eq!(SaveSettings::history_limit_for_index(9), 1_000);
     }

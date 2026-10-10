@@ -222,6 +222,8 @@ pub(crate) struct HistoryTracker {
     /// Id for the next listed download. Never 0, which marks the active download.
     next_item_id: i32,
     session_id: u64,
+    /// Kept when the entry is cleared, so a finish still on screen is not listed again.
+    listed_session: Option<u64>,
     completed: Option<HistoryEntry>,
 }
 
@@ -230,6 +232,7 @@ impl HistoryTracker {
         Self {
             next_item_id: loaded_next_id,
             session_id: 0,
+            listed_session: None,
             completed: None,
         }
     }
@@ -251,9 +254,10 @@ impl HistoryTracker {
         match snap.status {
             // The first snapshot to report the finish is the one kept, so the listed row keeps
             // the id and the completion time of that first report.
-            DownloadStatus::Completed if self.completed.is_none() => {
+            DownloadStatus::Completed if self.listed_session != Some(snap.session_id) => {
                 let entry = finished_download(self.next_item_id, snap);
                 self.next_item_id = self.next_item_id.saturating_add(1);
+                self.listed_session = Some(snap.session_id);
                 self.completed = Some(entry.clone());
                 Some(entry)
             }

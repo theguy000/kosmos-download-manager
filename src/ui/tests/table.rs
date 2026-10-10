@@ -482,8 +482,6 @@ fn clearing_history_leaves_nothing_pointing_at_a_removed_row()
     bind_properties_handlers(&ui, &state);
     crate::ui::handlers::delete::bind_delete_handlers(&ui, &state);
 
-    // A selected row with its File Properties dialog and a pending delete, plus a finished
-    // download the toolbar still holds.
     ui.set_selected_row(1);
     ui.set_history_row_selected(true);
     ui.invoke_open_properties(1);
@@ -510,8 +508,15 @@ fn clearing_history_leaves_nothing_pointing_at_a_removed_row()
     assert!(state.history_tracker.borrow().completed().is_none());
     assert!(!ui.get_completed_listed());
     assert!(download.path().exists(), "clearing never deletes files");
+    assert!(
+        state
+            .history_tracker
+            .borrow_mut()
+            .observe(&active_snapshot(7, DownloadStatus::Completed))
+            .is_none(),
+        "the finish still on screen is not listed again"
+    );
 
-    // A later finish gets an id no removed row had.
     let next = state
         .history_tracker
         .borrow_mut()
@@ -519,7 +524,6 @@ fn clearing_history_leaves_nothing_pointing_at_a_removed_row()
         .ok_or("the finish is listed")?;
     assert!(next.id > listed.id);
 
-    // The active download's row and an open dialog for it stay.
     ui.set_selected_row(0);
     ui.invoke_open_properties(0);
     ui.invoke_clear_history();

@@ -148,8 +148,6 @@ fn options_general_tab_history_controls_are_keyboard_reachable()
         window.dispatch_event(WindowEvent::KeyPressed { text });
     };
 
-    // Stops: tab strip, startup checkbox (only where visible), history limit, Clear history,
-    // OK, Cancel.
     for (startup_visible, tabs_to_limit) in [(false, 2), (true, 3)] {
         ui.set_startup_option_visible(startup_visible);
         ui.set_options_history_limit_index(3);
