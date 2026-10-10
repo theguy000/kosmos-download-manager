@@ -16,6 +16,7 @@ pub(super) fn finished_entry(id: i32, filename: &str, total_bytes: u64) -> Histo
         save_path: PathBuf::from(filename),
         total_bytes,
         completed_unix_ms: 1_700_000_000_000 + id as u64,
+        description: String::new(),
     }
 }
 

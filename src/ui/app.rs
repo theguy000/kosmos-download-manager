@@ -2,6 +2,7 @@ use super::handlers::actions::bind_action_handlers;
 use super::handlers::columns::{bind_column_handlers, init_columns, start_column_widths_worker};
 use super::handlers::delete::{DeleteTarget, PendingDelete, bind_delete_handlers};
 use super::handlers::options::bind_options_handlers;
+use super::handlers::properties::{bind_properties_handlers, follow_active_download};
 use super::handlers::sidebar::update_sidebar_categories;
 use super::handlers::table::{bind_table_handlers, resort, update_selection_state};
 use super::projection::{history_table_item, should_project_snapshot, update_window_state};
@@ -69,6 +70,7 @@ pub fn run_app(
     bind_table_handlers(&main_window, &state);
     bind_action_handlers(&main_window, &state);
     bind_delete_handlers(&main_window, &state);
+    bind_properties_handlers(&main_window, &state);
 
     // IPC server to receive downloads and show requests from browser extension and native host
     {
@@ -126,7 +128,11 @@ pub fn run_app(
 
                 let snap = rx.borrow_and_update();
                 if should_project_snapshot(&snap, &mut initial_snapshot) {
-                    if let Some(entry) = state.history_tracker.borrow_mut().observe(&snap) {
+                    let listed = state.history_tracker.borrow_mut().observe(&snap);
+                    follow_active_download(&window, &state, &snap, listed.as_ref());
+                    if let Some(mut entry) = listed {
+                        entry.description =
+                            state.active_description.borrow_mut().take(snap.session_id);
                         if let Err(error) = state.history_store.borrow_mut().record(entry.clone()) {
                             window.set_action_error_message(
                                 format!("Could not save download history: {error}").into(),

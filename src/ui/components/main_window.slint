@@ -8,6 +8,7 @@ import { DeleteConfirmationDialog } from "delete_confirmation_dialog.slint";
 import { DownloadTable, TableItem, ChunkVisual } from "download_table.slint";
 import { DuplicateDownloadDialog } from "duplicate_dialog.slint";
 import { ErrorDialog } from "error_dialog.slint";
+import { FileProperties, FilePropertiesDialog } from "file_properties_dialog.slint";
 import { Navigation } from "navigation.slint";
 import { CategoryOption, OptionsDialog } from "options_dialog.slint";
 import { CategorySidebar, Subcategory } from "sidebar.slint";
@@ -38,6 +39,11 @@ export component MainWindow inherits Window {
     in-out property <bool> startup_option_visible: false;
     in-out property <bool> show_delete_dialog: false;
     in-out property <bool> show_duplicate_dialog: false;
+    in-out property <bool> show_properties_dialog: false;
+    in-out property <FileProperties> properties;
+    in-out property <string> properties_description: "";
+    /// Row whose properties are open: 0 is the active download.
+    in-out property <int> properties_row: 0;
     in-out property <string> duplicate_url: "";
     in-out property <string> duplicate_filename: "";
     in-out property <string> duplicate_existing_size: "";
@@ -115,6 +121,9 @@ export component MainWindow inherits Window {
     callback history_delete_finished(int, bool, string);
     callback resolve_duplicate(int, bool);
     callback dismiss_duplicate();
+    /// The info button of a row asked for its properties.
+    callback open_properties(int);
+    callback save_description(int, string);
     callback browse_folder();
     /// Opens the file of the selected row: the active download in row 0, or an archived one.
     callback open_file();
@@ -189,7 +198,7 @@ export component MainWindow inherits Window {
 
             Rectangle { width: 1px; background: Palette.border; }
 
-            DownloadTable {
+            table := DownloadTable {
                 col-filename-width <=> root.col_filename_width;
                 col-size-width <=> root.col_size_width;
                 col-status-width <=> root.col_status_width;
@@ -220,6 +229,7 @@ export component MainWindow inherits Window {
                 row-selected(id) => { root.row_selected(id); }
                 sort-requested(column) => { root.sort_requested(column); }
                 step-selection(step) => { root.step_selection(step); }
+                properties-requested(id) => { root.open_properties(id); }
             }
         }
 
@@ -286,6 +296,20 @@ export component MainWindow inherits Window {
             root.dismiss-delete();
         }
         confirm(delete-file) => { root.confirm-delete(delete-file); }
+    }
+
+    if root.show_properties_dialog: FilePropertiesDialog {
+        properties: root.properties;
+        description <=> root.properties_description;
+        dismiss(from_keyboard) => {
+            root.show_properties_dialog = false;
+            if from_keyboard { table.focus-list(); }
+        }
+        confirm(from_keyboard) => {
+            root.show_properties_dialog = false;
+            root.save_description(root.properties_row, root.properties_description);
+            if from_keyboard { table.focus-list(); }
+        }
     }
 
     if root.show_duplicate_dialog: DuplicateDownloadDialog {

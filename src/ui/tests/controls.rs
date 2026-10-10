@@ -590,9 +590,12 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             },
             "Mouse click on tab does not show focus ring"
         );
-        window.dispatch_event(WindowEvent::KeyPressed {
-            text: slint::platform::Key::Tab.into(),
-        });
+        // Tab 1 is Save To: the strip, then six controls, then OK. Eight stops in total.
+        for _ in 0..6 {
+            window.dispatch_event(WindowEvent::KeyPressed {
+                text: slint::platform::Key::Tab.into(),
+            });
+        }
         window.dispatch_event(WindowEvent::KeyPressed {
             text: slint::platform::Key::Return.into(),
         });
@@ -845,6 +848,7 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             save_path: file.path().with_file_name("video.mp4"),
             total_bytes: 10_000,
             completed_unix_ms: 1_700_000_000_000,
+            description: String::new(),
         };
         store.record(entry.clone())?;
         history.set_row_data(0, history_table_item(&SaveSettings::default(), &entry));
