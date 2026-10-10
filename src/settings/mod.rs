@@ -41,7 +41,6 @@ pub struct SaveSettings {
     /// the user's own list.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub disabled_categories: BTreeSet<Category>,
-    /// Whether the browser extension may hand its downloads to KDM.
     #[serde(default = "default_browser_integration")]
     pub browser_integration: bool,
 }

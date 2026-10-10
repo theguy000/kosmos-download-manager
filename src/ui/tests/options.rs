@@ -113,6 +113,66 @@ fn options_browser_checkbox_is_a_tab_stop_before_ok() -> Result<(), Box<dyn std:
 }
 
 #[test]
+fn options_browser_checkbox_commits_on_ok_and_not_on_cancel()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let commits = Rc::new(RefCell::new(Vec::new()));
+    ui.on_commit_options({
+        let commits = commits.clone();
+        let ui = ui.as_weak();
+        move |_| {
+            if let Some(ui) = ui.upgrade() {
+                commits
+                    .borrow_mut()
+                    .push(ui.get_options_browser_integration());
+            }
+        }
+    });
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    ui.set_options_browser_integration(true);
+    ui.set_show_options_dialog(true);
+    render();
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
+    press(" ".into());
+    press(slint::platform::Key::Escape.into());
+    assert!(
+        commits.borrow().is_empty(),
+        "Cancel must not commit the toggle"
+    );
+
+    ui.set_options_browser_integration(true);
+    ui.set_show_options_dialog(true);
+    render();
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
+    press(" ".into());
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Return.into());
+    assert_eq!(
+        *commits.borrow(),
+        vec![false],
+        "OK commits the unchecked box"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn options_downloads_tab_streams_slider_is_keyboard_reachable()
 -> Result<(), Box<dyn std::error::Error>> {
     let (window, _clipboard) = install_test_platform()?;

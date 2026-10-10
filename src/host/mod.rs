@@ -36,15 +36,15 @@ pub fn find_app_executable() -> std::io::Result<PathBuf> {
 }
 
 /// A refused download makes the extension let the browser keep it.
-fn download_refused(message: &HostMessage, settings: &SaveSettings) -> bool {
-    matches!(message, HostMessage::Download { .. }) && !settings.browser_integration
+fn download_refused(message: &HostMessage, settings: impl FnOnce() -> SaveSettings) -> bool {
+    matches!(message, HostMessage::Download { .. }) && !settings().browser_integration
 }
 
 /// Dispatches a message received from the browser extension.
 /// Either routes it to the running Kosmos Download Manager GUI via IPC,
 /// or launches the application if it is not currently running.
 pub async fn handle_host_message(message: HostMessage) -> HostResponse {
-    if download_refused(&message, &SaveSettings::load()) {
+    if download_refused(&message, SaveSettings::load) {
         return HostResponse::error("browser_integration_disabled");
     }
 
@@ -105,6 +105,13 @@ pub async fn run_native_messaging_host() -> std::io::Result<()> {
 mod tests {
     use super::*;
 
+    fn off() -> SaveSettings {
+        SaveSettings {
+            browser_integration: false,
+            ..Default::default()
+        }
+    }
+
     fn download() -> HostMessage {
         HostMessage::Download {
             url: "https://example.com/file.zip".to_string(),
@@ -117,22 +124,14 @@ mod tests {
 
     #[test]
     fn download_is_refused_only_when_browser_integration_is_off() {
-        let on = SaveSettings::default();
-        let off = SaveSettings {
-            browser_integration: false,
-            ..Default::default()
-        };
-        assert!(!download_refused(&download(), &on));
-        assert!(download_refused(&download(), &off));
+        assert!(!download_refused(&download(), SaveSettings::default));
+        assert!(download_refused(&download(), off));
     }
 
     #[test]
     fn show_and_ping_are_never_refused() {
-        let off = SaveSettings {
-            browser_integration: false,
-            ..Default::default()
-        };
-        assert!(!download_refused(&HostMessage::Show, &off));
-        assert!(!download_refused(&HostMessage::Ping, &off));
+        let unread = || unreachable!("Show and Ping must not read settings");
+        assert!(!download_refused(&HostMessage::Show, unread));
+        assert!(!download_refused(&HostMessage::Ping, unread));
     }
 }
