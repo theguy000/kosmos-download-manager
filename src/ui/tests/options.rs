@@ -47,6 +47,7 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(" ".into());
     assert!(ui.get_options_launch_on_startup());
     press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
     press(slint::platform::Key::Return.into());
     assert!(!ui.get_show_options_dialog());
     assert_eq!(*commits.borrow(), vec![true], "OK commits the change");
@@ -63,6 +64,50 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(slint::platform::Key::Escape.into());
     assert!(!ui.get_show_options_dialog());
     assert_eq!(*commits.borrow(), vec![true], "Escape discards the change");
+
+    Ok(())
+}
+
+#[test]
+fn options_browser_checkbox_is_a_tab_stop_before_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    // The startup checkbox is hidden off Windows, so the stop count differs between the runs.
+    for (startup_visible, tabs_to_checkbox) in [(false, 2), (true, 3)] {
+        ui.set_startup_option_visible(startup_visible);
+        ui.set_show_options_dialog(true);
+        render();
+
+        let before = ui.get_options_browser_integration();
+        for _ in 0..tabs_to_checkbox {
+            press(slint::platform::Key::Tab.into());
+        }
+        press(" ".into());
+        assert_eq!(
+            ui.get_options_browser_integration(),
+            !before,
+            "Space toggles the browser checkbox (startup option visible: {startup_visible})"
+        );
+        press(slint::platform::Key::Tab.into());
+        press(slint::platform::Key::Return.into());
+        assert!(
+            !ui.get_show_options_dialog(),
+            "OK follows the browser checkbox (startup option visible: {startup_visible})"
+        );
+    }
 
     Ok(())
 }
