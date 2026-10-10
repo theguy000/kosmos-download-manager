@@ -22,7 +22,7 @@ const fn default_streams() -> u8 {
 
 /// Choices for "Keep at most N downloads", smallest first. Keep in step with the combo in
 /// `options_dialog.slint`; a saved value outside this range is clamped on load.
-pub const HISTORY_LIMITS: [usize; 5] = [100, 250, 500, 1_000, 5_000];
+const HISTORY_LIMITS: [usize; 5] = [100, 250, 500, 1_000, 5_000];
 
 const fn default_history_limit() -> usize {
     crate::history::MAX_HISTORY_ENTRIES

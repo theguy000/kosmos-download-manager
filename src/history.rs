@@ -63,7 +63,7 @@ impl HistoryStore {
 
     /// Keeps the newest `limit` records. Unusable lines are skipped rather than reported: a
     /// partially written or hand-edited file must never stop the application from starting.
-    pub fn load_limited(path: PathBuf, limit: usize) -> Self {
+    fn load_limited(path: PathBuf, limit: usize) -> Self {
         let entries = std::fs::read_to_string(&path)
             .map(|text| parse_history(&text, limit))
             .unwrap_or_default();

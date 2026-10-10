@@ -54,12 +54,11 @@ export component OptionsDialog inherits Rectangle {
     ];
 
     private property <bool> general_tab: root.selected_tab == 0;
-    private property <bool> startup_stop: root.startup_option_visible && root.general_tab;
-    // Index of the history limit combo: after the tab strip and the optional startup checkbox.
-    private property <int> general_first: root.startup_option_visible ? 2 : 1;
+    private property <bool> startup_stop: root.startup_option_visible && root.selected_tab == 0;
+    private property <int> general_first_stop: root.startup_stop ? 2 : 1;
     private property <bool> save_to_tab: root.selected_tab == 1;
     private property <bool> downloads_tab: root.selected_tab == 2;
-    private property <int> stop_count: root.general_tab ? root.general_first + 4
+    private property <int> stop_count: root.general_tab ? root.general_first_stop + 4
         : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : (root.downloads_tab ? 4 : 3));
 
     private property <string> current_category_name:
@@ -76,8 +75,8 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab && root.save_to_category != 0 && types_input.has-keyboard_focus ? 5
         : (root.save_to_tab && kdm_box.has-keyboard-focus ? (root.save_to_category == 0 ? 5 : 6)
         : (root.downloads_tab && streams_slider.has_keyboard_focus ? 1
-        : (root.general_tab && history_limit_combo.has_keyboard_focus ? root.general_first
-        : (root.general_tab && clear_button.has-keyboard-focus ? root.general_first + 1
+        : (root.general_tab && history_limit_combo.has_keyboard_focus ? root.general_first_stop
+        : (root.general_tab && clear_button.has-keyboard-focus ? root.general_first_stop + 1
         : (ok_button.has-keyboard-focus ? root.stop_count - 2
         : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))))));
 
@@ -102,8 +101,8 @@ export component OptionsDialog inherits Rectangle {
         root.keyboard_focused = index == 0;
         if index == 0 { strip_focus.focus(); }
         else if root.startup_stop && index == 1 { startup_box.take-focus(); }
-        else if root.general_tab && index == root.general_first { history_limit_combo.take-focus(); }
-        else if root.general_tab && index == root.general_first + 1 { clear_button.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop { history_limit_combo.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 1 { clear_button.take-focus(); }
         else if root.save_to_tab && index == 1 { category_combo.take-focus(); }
         else if root.save_to_tab && index == 2 { path_input.take-focus(); }
         else if root.save_to_tab && index == 3 { browse_button.take-focus(); }
