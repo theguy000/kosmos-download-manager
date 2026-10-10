@@ -35,6 +35,17 @@ export component OptionsDialog inherits Rectangle {
 
     in-out property <float> streams_count: 8;
 
+    // General tab. Keep the items in step with HISTORY_LIMITS in src/settings/mod.rs.
+    in-out property <int> history_limit_index: 3;
+    private property <[ComboItem]> history_limit_items: [
+        { text: "100", action_icon: "", action_label: "" },
+        { text: "250", action_icon: "", action_label: "" },
+        { text: "500", action_icon: "", action_label: "" },
+        { text: "1,000", action_icon: "", action_label: "" },
+        { text: "5,000", action_icon: "", action_label: "" },
+    ];
+    private property <bool> clear_armed: false;
+
     private property <[string]> tab_names: [
         "General",
         "Save To",
@@ -49,7 +60,7 @@ export component OptionsDialog inherits Rectangle {
     private property <int> general_first_stop: root.startup_option_visible ? 2 : 1;
     private property <bool> save_to_tab: root.selected_tab == 1;
     private property <bool> downloads_tab: root.selected_tab == 2;
-    private property <int> stop_count: root.general_tab ? (root.startup_option_visible ? 6 : 5)
+    private property <int> stop_count: root.general_tab ? root.general_first_stop + 6
         : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : (root.downloads_tab ? 4 : 3));
 
     private property <string> current_category_name:
@@ -68,8 +79,10 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab && root.save_to_category != 0 && types_input.has-keyboard_focus ? 5
         : (root.save_to_tab && kdm_box.has-keyboard-focus ? (root.save_to_category == 0 ? 5 : 6)
         : (root.downloads_tab && streams_slider.has_keyboard_focus ? 1
+        : (root.general_tab && history_limit_combo.has_keyboard_focus ? root.general_first_stop + 2
+        : (root.general_tab && clear_button.has-keyboard-focus ? root.general_first_stop + 3
         : (ok_button.has-keyboard-focus ? root.stop_count - 2
-        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))))));
+        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))))))));
 
     private property <bool> keyboard_focused: false;
 
@@ -80,6 +93,7 @@ export component OptionsDialog inherits Rectangle {
     callback default_dir_edited(string, string);
     callback toggle_category_list(int);
     callback toggle_kdm_folder(bool);
+    callback clear_history();
 
     function sync_to_input() {
         if root.categories.length == 0 { return; }
@@ -93,6 +107,8 @@ export component OptionsDialog inherits Rectangle {
         else if root.startup_stop && index == 1 { startup_box.take-focus(); }
         else if root.general_tab && index == root.general_first_stop { browser_box.take-focus(); }
         else if root.general_tab && index == root.general_first_stop + 1 { delete_box.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 2 { history_limit_combo.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 3 { clear_button.take-focus(); }
         else if root.save_to_tab && index == 1 { category_combo.take-focus(); }
         else if root.save_to_tab && index == 2 { path_input.take-focus(); }
         else if root.save_to_tab && index == 3 { browse_button.take-focus(); }
@@ -106,7 +122,10 @@ export component OptionsDialog inherits Rectangle {
 
     changed categories => { root.sync_to_input(); }
     changed save_to_category => { root.sync_to_input(); }
-    changed selected_tab => { content_scroll.content-y = 0; }
+    changed selected_tab => {
+        content_scroll.content-y = 0;
+        root.clear_armed = false;
+    }
 
     background: Palette.overlay;
     forward-focus: dialog_focus;
@@ -269,6 +288,49 @@ export component OptionsDialog inherits Rectangle {
                             delete_box := DialogCheckBox {
                                 checked <=> root.ask_before_delete;
                                 text: "Ask before deleting a download";
+                            }
+
+                            HorizontalLayout {
+                                spacing: 12px;
+                                height: 32px;
+
+                                Text { text: "Keep at most:"; width: 85px; font-size: 12px; color: Palette.text-muted; vertical-alignment: center; }
+                                history_limit_combo := DialogComboBox {
+                                    width: 100px;
+                                    label: "History limit";
+                                    current_index <=> root.history_limit_index;
+                                    items: root.history_limit_items;
+                                }
+                                Text { text: "downloads in history"; font-size: 12px; color: Palette.text-muted; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 12px;
+                                height: 36px;
+
+                                // The first activation arms the button; the second clears.
+                                clear_button := PointerButton {
+                                    width: 150px;
+                                    text: root.clear_armed ? "Click again to clear" : "Clear history";
+                                    filled: !root.clear_armed;
+                                    danger: root.clear_armed;
+                                    clicked => {
+                                        if root.clear_armed {
+                                            root.clear_armed = false;
+                                            root.clear_history();
+                                        } else {
+                                            root.clear_armed = true;
+                                        }
+                                    }
+                                }
+                                Text {
+                                    text: "Downloaded files stay on disk.";
+                                    font-size: 11px;
+                                    color: Palette.text-muted;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                }
                             }
                         }
 

@@ -143,6 +143,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 window.set_streams_count(f32::from(settings.streams));
                 window.set_options_browser_integration(settings.browser_integration);
                 window.set_options_ask_before_delete(settings.ask_before_delete);
+                window.set_options_history_limit_index(settings.history_limit_index());
             }
 
             let window_weak = window_weak.clone();
@@ -298,6 +299,9 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     streams: window.get_streams_count().round() as u8,
                     browser_integration: window.get_options_browser_integration(),
                     ask_before_delete: window.get_options_ask_before_delete(),
+                    history_limit: SaveSettings::history_limit_for_index(
+                        window.get_options_history_limit_index(),
+                    ),
                     ..Default::default()
                 };
                 for option in &categories {
@@ -324,6 +328,15 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 *save_settings.borrow_mut() = new_settings.clone();
                 update_sidebar_categories(&window, &new_settings);
                 window.set_dest_dir_text(effective_default.to_string_lossy().as_ref().into());
+
+                if let Err(error) = history_store
+                    .borrow_mut()
+                    .set_limit(new_settings.history_limit)
+                {
+                    window.set_action_error_message(
+                        format!("Could not save download history: {error}").into(),
+                    );
+                }
 
                 {
                     let settings = save_settings.borrow();

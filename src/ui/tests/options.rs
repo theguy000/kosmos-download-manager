@@ -46,7 +46,8 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(slint::platform::Key::Tab.into());
     press(" ".into());
     assert!(ui.get_options_launch_on_startup());
-    for _ in 0..3 {
+    // Browser, delete, history limit and Clear history come before OK.
+    for _ in 0..5 {
         press(slint::platform::Key::Tab.into());
     }
     press(slint::platform::Key::Return.into());
@@ -100,8 +101,8 @@ fn walk_general_tab(startup_visible: bool) -> Result<(), Box<dyn std::error::Err
     press(" ".into());
     assert!(!ui.get_options_ask_before_delete());
 
-    // OK, Cancel, the tab strip, and back to the first checkbox.
-    for _ in 0..4 {
+    // History limit, Clear, OK, Cancel, the tab strip, and back to the first checkbox.
+    for _ in 0..6 {
         tab();
     }
     press(" ".into());
@@ -165,12 +166,13 @@ fn options_browser_checkbox_is_a_tab_stop_before_ok() -> Result<(), Box<dyn std:
             !before,
             "Space toggles the browser checkbox (startup option visible: {startup_visible})"
         );
-        press(slint::platform::Key::Tab.into());
-        press(slint::platform::Key::Tab.into());
+        for _ in 0..4 {
+            press(slint::platform::Key::Tab.into());
+        }
         press(slint::platform::Key::Return.into());
         assert!(
             !ui.get_show_options_dialog(),
-            "OK follows the browser and delete checkboxes (startup option visible: {startup_visible})"
+            "OK follows the browser, delete, history limit and Clear controls (startup option visible: {startup_visible})"
         );
     }
 
@@ -226,8 +228,9 @@ fn options_browser_checkbox_commits_on_ok_and_not_on_cancel()
     press(slint::platform::Key::Tab.into());
     press(slint::platform::Key::Tab.into());
     press(" ".into());
-    press(slint::platform::Key::Tab.into());
-    press(slint::platform::Key::Tab.into());
+    for _ in 0..4 {
+        press(slint::platform::Key::Tab.into());
+    }
     press(slint::platform::Key::Return.into());
     assert_eq!(
         *commits.borrow(),
@@ -281,6 +284,76 @@ fn options_downloads_tab_streams_slider_is_keyboard_reachable()
         !ui.get_show_options_dialog(),
         "the slider is followed by OK, which Return activates"
     );
+
+    Ok(())
+}
+
+#[test]
+fn options_general_tab_history_controls_are_keyboard_reachable()
+-> Result<(), Box<dyn std::error::Error>> {
+    use slint::platform::Key;
+
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let commits = Rc::new(RefCell::new(0));
+    let clears = Rc::new(RefCell::new(0));
+    ui.on_commit_options({
+        let commits = commits.clone();
+        move |_| *commits.borrow_mut() += 1
+    });
+    ui.on_clear_history({
+        let clears = clears.clone();
+        move || *clears.borrow_mut() += 1
+    });
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    for (startup_visible, tabs_to_limit) in [(false, 4), (true, 5)] {
+        ui.set_startup_option_visible(startup_visible);
+        ui.set_options_history_limit_index(3);
+        ui.set_show_options_dialog(true);
+        render();
+
+        for _ in 0..tabs_to_limit {
+            press(Key::Tab.into());
+        }
+        press(Key::DownArrow.into());
+        assert_eq!(
+            ui.get_options_history_limit_index(),
+            4,
+            "the combo owns the arrow keys (startup checkbox visible: {startup_visible})"
+        );
+
+        let cleared = *clears.borrow();
+        press(Key::Tab.into());
+        press(" ".into());
+        assert_eq!(*clears.borrow(), cleared, "the first press only arms");
+        press(" ".into());
+        assert_eq!(*clears.borrow(), cleared + 1, "the second press clears");
+
+        press(Key::Tab.into());
+        if startup_visible {
+            press(Key::Tab.into());
+            press(Key::Return.into());
+            assert!(!ui.get_show_options_dialog(), "Cancel is the last stop");
+            assert_eq!(*commits.borrow(), 1, "Cancel does not commit");
+        } else {
+            press(Key::Return.into());
+            assert!(!ui.get_show_options_dialog(), "OK follows Clear history");
+            assert_eq!(*commits.borrow(), 1, "OK commits");
+        }
+    }
 
     Ok(())
 }
