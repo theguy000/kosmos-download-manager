@@ -20,6 +20,10 @@ const fn default_streams() -> u8 {
     8
 }
 
+const fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
@@ -37,6 +41,9 @@ pub struct SaveSettings {
     /// the user's own list.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub disabled_categories: BTreeSet<Category>,
+    /// Ask before deleting a download. Off removes it from the list and keeps every file.
+    #[serde(default = "default_true")]
+    pub confirm_delete: bool,
 }
 
 impl Default for SaveSettings {
@@ -48,6 +55,7 @@ impl Default for SaveSettings {
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
+            confirm_delete: true,
         }
     }
 }
@@ -324,6 +332,7 @@ mod tests {
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
+            confirm_delete: false,
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -350,6 +359,21 @@ mod tests {
             assert_eq!(SaveSettings::load_from(&path).unwrap().streams, expected);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_confirm_delete_defaults_on_for_old_settings_files() {
+        let path = std::env::temp_dir().join(format!("kosmos_confirm_{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
+        assert!(SaveSettings::load_from(&path).unwrap().confirm_delete);
+        std::fs::write(
+            &path,
+            r#"{"default_dir":"D:\\Downloads","confirm_delete":false}"#,
+        )
+        .unwrap();
+        assert!(!SaveSettings::load_from(&path).unwrap().confirm_delete);
+        let _ = std::fs::remove_file(&path);
+        assert!(SaveSettings::default().confirm_delete);
     }
 
     #[test]
