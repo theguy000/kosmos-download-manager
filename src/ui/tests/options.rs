@@ -47,6 +47,7 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(" ".into());
     assert!(ui.get_options_launch_on_startup());
     press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
     press(slint::platform::Key::Return.into());
     assert!(!ui.get_show_options_dialog());
     assert_eq!(*commits.borrow(), vec![true], "OK commits the change");
@@ -65,6 +66,66 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     assert_eq!(*commits.borrow(), vec![true], "Escape discards the change");
 
     Ok(())
+}
+
+/// Walks the General tab by keyboard: toggles the delete-confirmation checkbox, then checks that
+/// OK and Cancel follow it and that Tab wraps around after Cancel.
+fn walk_general_tab(startup_visible: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+    let tab = || press(slint::platform::Key::Tab.into());
+
+    ui.set_startup_option_visible(startup_visible);
+    ui.set_show_options_dialog(true);
+    render();
+    assert!(ui.get_options_confirm_delete(), "asks by default");
+
+    // Tab strip, the startup checkbox when shown, then the delete confirmation checkbox.
+    for _ in 0..if startup_visible { 3 } else { 2 } {
+        tab();
+    }
+    press(" ".into());
+    assert!(!ui.get_options_confirm_delete());
+
+    // OK, Cancel, the tab strip, and back to the first checkbox.
+    for _ in 0..4 {
+        tab();
+    }
+    press(" ".into());
+    if startup_visible {
+        assert!(ui.get_options_launch_on_startup());
+        assert!(!ui.get_options_confirm_delete());
+    } else {
+        assert!(ui.get_options_confirm_delete(), "the same checkbox again");
+    }
+
+    press(slint::platform::Key::Escape.into());
+    assert!(!ui.get_show_options_dialog());
+    Ok(())
+}
+
+#[test]
+fn options_general_tab_delete_confirmation_is_a_stop_with_startup_option()
+-> Result<(), Box<dyn std::error::Error>> {
+    walk_general_tab(true)
+}
+
+#[test]
+fn options_general_tab_delete_confirmation_is_a_stop_without_startup_option()
+-> Result<(), Box<dyn std::error::Error>> {
+    walk_general_tab(false)
 }
 
 #[test]

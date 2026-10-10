@@ -45,11 +45,21 @@ pub(crate) enum PendingDelete {
     },
 }
 
+/// Shows the confirmation, or when the user turned it off, removes the download and keeps its files.
+fn ask_or_remove(window: &MainWindow, confirm: bool) {
+    if confirm {
+        window.set_show_delete_dialog(true);
+    } else {
+        window.invoke_confirm_delete(false);
+    }
+}
+
 fn open_active_delete_confirmation(
     window: &MainWindow,
     displayed: &RefCell<Option<DeleteTarget>>,
     pending: &RefCell<Option<PendingDelete>>,
     completed_only: bool,
+    confirm: bool,
 ) {
     let Some(mut request) = displayed.borrow().clone() else {
         return;
@@ -65,13 +75,14 @@ fn open_active_delete_confirmation(
     window.set_delete_completed_only(completed_only);
     window.set_delete_target_completed(target_completed);
     window.set_delete_file(false);
-    window.set_show_delete_dialog(true);
+    ask_or_remove(window, confirm);
 }
 
 fn open_history_delete_confirmation(
     window: &MainWindow,
     pending: &RefCell<Option<PendingDelete>>,
     entry: &HistoryEntry,
+    confirm: bool,
 ) {
     *pending.borrow_mut() = Some(PendingDelete::History {
         id: entry.id,
@@ -82,7 +93,7 @@ fn open_history_delete_confirmation(
     window.set_delete_completed_only(false);
     window.set_delete_target_completed(true);
     window.set_delete_file(false);
-    window.set_show_delete_dialog(true);
+    ask_or_remove(window, confirm);
 }
 
 pub(crate) fn clear_active_completed(
@@ -165,16 +176,26 @@ pub(crate) fn bind_delete_handlers(window: &MainWindow, state: &AppState) {
         let displayed = state.displayed_delete_target.clone();
         let pending = state.pending_delete.clone();
         let store = state.history_store.clone();
+        let settings = state.save_settings.clone();
         let window_weak = window.as_weak();
         window.on_request_delete_selected(move || {
             let Some(window) = window_weak.upgrade() else {
                 return;
             };
+            let confirm = settings.borrow().confirm_delete;
             let selected = window.get_selected_row();
             if selected == 0 {
-                open_active_delete_confirmation(&window, &displayed, &pending, false);
-            } else if let Some(entry) = store.borrow().entries().iter().find(|e| e.id == selected) {
-                open_history_delete_confirmation(&window, &pending, entry);
+                open_active_delete_confirmation(&window, &displayed, &pending, false, confirm);
+            } else {
+                let entry = store
+                    .borrow()
+                    .entries()
+                    .iter()
+                    .find(|e| e.id == selected)
+                    .cloned();
+                if let Some(entry) = entry {
+                    open_history_delete_confirmation(&window, &pending, &entry, confirm);
+                }
             }
         });
     }
@@ -182,10 +203,12 @@ pub(crate) fn bind_delete_handlers(window: &MainWindow, state: &AppState) {
     {
         let displayed = state.displayed_delete_target.clone();
         let pending = state.pending_delete.clone();
+        let settings = state.save_settings.clone();
         let window_weak = window.as_weak();
         window.on_request_delete_completed(move || {
             if let Some(window) = window_weak.upgrade() {
-                open_active_delete_confirmation(&window, &displayed, &pending, true);
+                let confirm = settings.borrow().confirm_delete;
+                open_active_delete_confirmation(&window, &displayed, &pending, true, confirm);
             }
         });
     }
