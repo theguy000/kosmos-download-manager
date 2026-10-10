@@ -6,8 +6,12 @@ use super::{Session, calculate_downloaded, uses_range_workers};
 use crate::client::RemoteFileInfo;
 use crate::engine::chunks::ChunkRange;
 use crate::engine::model::{DownloadStatus, DuplicateChoice, DuplicatePrompt};
+use crate::engine::worker::OVERLAP_BYTES;
 use crate::storage::{Storage, StorageError};
 use std::path::PathBuf;
+
+/// Blocks sampled when an existing file is adopted, so requests do not grow with file size.
+const ADOPT_SAMPLES: u64 = 32;
 
 pub(super) struct PendingDuplicate {
     pub(super) prompt: DuplicatePrompt,
@@ -362,7 +366,8 @@ impl Session {
         }
     }
 
-    /// Samples the first and last saved bytes of an existing file against the remote file.
+    /// Samples evenly spaced blocks of an existing file, including the first and last, against
+    /// the remote file. Files of up to `ADOPT_SAMPLES` blocks are checked whole.
     /// This consistency heuristic covers data the engine did not write itself.
     pub(super) async fn verify_existing_bytes(
         &mut self,
@@ -380,17 +385,27 @@ impl Session {
         let client = self.client.clone();
         let url = self.current_url.clone();
         let validator = info.resume_validator().map(str::to_owned);
-        verify_saved_region(
-            &client,
-            &url,
-            validator.as_deref(),
-            total,
-            storage,
-            0,
-            bytes,
-        )
-        .await
-        .map_err(|error| error.to_string())
+        let sample_len = bytes.min(OVERLAP_BYTES);
+        let span = bytes - sample_len;
+        let steps = ADOPT_SAMPLES - 1;
+        let mut offsets: Vec<u64> = (0..ADOPT_SAMPLES)
+            .map(|i| span / steps * i + span % steps * i / steps)
+            .collect();
+        offsets.dedup();
+        for offset in offsets {
+            verify_saved_region(
+                &client,
+                &url,
+                validator.as_deref(),
+                total,
+                storage,
+                offset,
+                sample_len,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        }
+        Ok(())
     }
 
     /// Reports an existing file that the engine refuses to reuse or replace.

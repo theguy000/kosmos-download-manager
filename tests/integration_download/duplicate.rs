@@ -1,4 +1,6 @@
-use crate::support::fixtures::{generate_test_payload, wait_for_snapshot};
+use crate::support::fixtures::{
+    OVERLAP_BYTES, generate_offset_payload, generate_test_payload, wait_for_snapshot,
+};
 use crate::support::mock_server::start_mock_server;
 use kosmos_download_manager::engine::{
     DownloadAction, DownloadEngine, DownloadStatus, DuplicateChoice,
@@ -522,4 +524,110 @@ async fn test_adversarial_server_200_ok_rejects_complete_file_adoption() {
     }
 
     let _ = std::fs::remove_dir_all(&save_dir);
+}
+
+#[tokio::test]
+async fn test_use_existing_rejects_preallocated_file_with_unwritten_middle() {
+    let save_dir = std::env::temp_dir().join(format!("kosmos_holes_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&save_dir);
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let payload = generate_test_payload();
+    let server_addr = start_mock_server(payload.clone()).await;
+    let url = format!("http://{server_addr}/payload.bin");
+
+    // Full-size file with only the first and last OVERLAP_BYTES written; the middle is zeros.
+    let mut partial = vec![0u8; payload.len()];
+    partial[..OVERLAP_BYTES].copy_from_slice(&payload[..OVERLAP_BYTES]);
+    let tail = payload.len() - OVERLAP_BYTES;
+    partial[tail..].copy_from_slice(&payload[tail..]);
+    std::fs::write(save_dir.join("payload.bin"), &partial).unwrap();
+
+    let engine = DownloadEngine::new();
+    let action_tx = engine.action_tx();
+    let mut snapshot_rx = engine.snapshot_rx();
+
+    action_tx
+        .send(DownloadAction::SetDuplicatePreference {
+            choice: Some(DuplicateChoice::UseExisting),
+        })
+        .await
+        .unwrap();
+    action_tx
+        .send(DownloadAction::Start {
+            url,
+            save_path: save_dir.clone(),
+            num_chunks: 4,
+        })
+        .await
+        .unwrap();
+
+    let done = wait_for_snapshot(
+        &mut snapshot_rx,
+        Duration::from_secs(5),
+        "Download neither completed nor failed",
+        |snap| {
+            matches!(
+                snap.status,
+                DownloadStatus::Completed | DownloadStatus::Failed(_)
+            )
+        },
+    )
+    .await;
+
+    let on_disk = std::fs::read(save_dir.join("payload.bin")).unwrap();
+    let _ = std::fs::remove_dir_all(&save_dir);
+    assert_ne!(
+        done.status,
+        DownloadStatus::Completed,
+        "file with an unwritten middle was adopted as Completed (on-disk bytes match payload: {})",
+        on_disk == payload
+    );
+}
+
+#[tokio::test]
+async fn test_use_existing_adopts_large_file_matching_every_sampled_block() {
+    let save_dir = std::env::temp_dir().join(format!("kosmos_adopt_large_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&save_dir);
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let payload = generate_offset_payload(1024 * 1024);
+    let server_addr = start_mock_server(payload.clone()).await;
+    std::fs::write(save_dir.join("payload.bin"), &payload).unwrap();
+
+    let engine = DownloadEngine::new();
+    let action_tx = engine.action_tx();
+    let mut snapshot_rx = engine.snapshot_rx();
+
+    action_tx
+        .send(DownloadAction::SetDuplicatePreference {
+            choice: Some(DuplicateChoice::UseExisting),
+        })
+        .await
+        .unwrap();
+    action_tx
+        .send(DownloadAction::Start {
+            url: format!("http://{server_addr}/payload.bin"),
+            save_path: save_dir.clone(),
+            num_chunks: 4,
+        })
+        .await
+        .unwrap();
+
+    let done = wait_for_snapshot(
+        &mut snapshot_rx,
+        Duration::from_secs(5),
+        "Matching large file was not adopted",
+        |snap| {
+            matches!(
+                snap.status,
+                DownloadStatus::Completed | DownloadStatus::Failed(_)
+            )
+        },
+    )
+    .await;
+
+    let _ = std::fs::remove_dir_all(&save_dir);
+    assert_eq!(done.status, DownloadStatus::Completed);
+    assert_eq!(done.downloaded_bytes, payload.len() as u64);
 }
