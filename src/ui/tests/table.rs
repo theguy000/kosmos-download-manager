@@ -451,6 +451,85 @@ fn file_properties_dialog_follows_the_active_download() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn clearing_history_leaves_nothing_pointing_at_a_removed_row()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    let file = TempFile::new("clear-ui");
+    let download = TempFile::new("clear-ui-download");
+    std::fs::write(download.path(), b"data")?;
+    {
+        let mut store = file.store();
+        let mut first = finished_entry(1, "a.bin", 4);
+        first.save_path = download.path().to_path_buf();
+        store.record(first)?;
+        store.record(finished_entry(2, "b.bin", 2))?;
+    }
+    let (state, _snapshot_tx) = properties_state(&file);
+    {
+        let settings = state.save_settings.borrow();
+        state.download_history.set_vec(
+            state
+                .history_store
+                .borrow()
+                .entries()
+                .iter()
+                .map(|entry| history_table_item(&settings, entry))
+                .collect::<Vec<_>>(),
+        );
+    }
+    ui.set_sample_downloads(state.download_history.clone().into());
+    bind_properties_handlers(&ui, &state);
+    crate::ui::handlers::delete::bind_delete_handlers(&ui, &state);
+
+    // A selected row with its File Properties dialog and a pending delete, plus a finished
+    // download the toolbar still holds.
+    ui.set_selected_row(1);
+    ui.set_history_row_selected(true);
+    ui.invoke_open_properties(1);
+    ui.invoke_request_delete_selected();
+    assert!(ui.get_show_properties_dialog());
+    assert!(ui.get_show_delete_dialog());
+    let listed = state
+        .history_tracker
+        .borrow_mut()
+        .observe(&active_snapshot(7, DownloadStatus::Completed))
+        .ok_or("the finish is listed")?;
+    ui.set_completed_listed(true);
+
+    ui.invoke_clear_history();
+
+    assert_eq!(state.history_store.borrow().entries(), []);
+    assert_eq!(file.store().entries(), [], "the log is emptied");
+    assert_eq!(state.download_history.row_count(), 0);
+    assert_eq!(ui.get_selected_row(), -1);
+    assert!(!ui.get_history_row_selected());
+    assert!(!ui.get_show_properties_dialog());
+    assert!(!ui.get_show_delete_dialog());
+    assert!(state.pending_delete.borrow().is_none());
+    assert!(state.history_tracker.borrow().completed().is_none());
+    assert!(!ui.get_completed_listed());
+    assert!(download.path().exists(), "clearing never deletes files");
+
+    // A later finish gets an id no removed row had.
+    let next = state
+        .history_tracker
+        .borrow_mut()
+        .observe(&active_snapshot(8, DownloadStatus::Completed))
+        .ok_or("the finish is listed")?;
+    assert!(next.id > listed.id);
+
+    // The active download's row and an open dialog for it stay.
+    ui.set_selected_row(0);
+    ui.invoke_open_properties(0);
+    ui.invoke_clear_history();
+    assert_eq!(ui.get_selected_row(), 0);
+    assert!(ui.get_show_properties_dialog());
+
+    Ok(())
+}
+
+#[test]
 fn file_properties_dialog_supports_the_keyboard() -> Result<(), Box<dyn std::error::Error>> {
     use slint::platform::{Key, WindowEvent};
 

@@ -160,7 +160,44 @@ pub(crate) fn history_delete_failure(removal: std::io::Result<()>) -> Option<std
     }
 }
 
+/// Empties the history: the log, the table, and everything that still points at a removed row.
+/// Downloaded files are never touched. Tracker ids only grow, so new rows cannot reuse an id.
+pub(crate) fn clear_history(window: &MainWindow, state: &AppState) {
+    if let Err(error) = state.history_store.borrow_mut().clear() {
+        window.set_action_error_message(format!("Could not save download history: {error}").into());
+    }
+    state.download_history.clear();
+    clear_active_completed(window, &state.history_tracker);
+
+    let pending_history_delete = matches!(
+        *state.pending_delete.borrow(),
+        Some(PendingDelete::History { .. })
+    );
+    if pending_history_delete {
+        *state.pending_delete.borrow_mut() = None;
+        window.set_show_delete_dialog(false);
+        window.set_delete_file(false);
+    }
+    if window.get_selected_row() > 0 {
+        window.set_selected_row(-1);
+        window.set_history_row_selected(false);
+    }
+    if window.get_show_properties_dialog() && window.get_properties_row() > 0 {
+        window.set_show_properties_dialog(false);
+    }
+}
+
 pub(crate) fn bind_delete_handlers(window: &MainWindow, state: &AppState) {
+    {
+        let state = state.clone();
+        let window_weak = window.as_weak();
+        window.on_clear_history(move || {
+            if let Some(window) = window_weak.upgrade() {
+                clear_history(&window, &state);
+            }
+        });
+    }
+
     {
         let displayed = state.displayed_delete_target.clone();
         let pending = state.pending_delete.clone();
