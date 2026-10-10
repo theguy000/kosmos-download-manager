@@ -590,9 +590,12 @@ fn controls_and_filters_support_pointer_and_keyboard() -> Result<(), Box<dyn std
             },
             "Mouse click on tab does not show focus ring"
         );
-        window.dispatch_event(WindowEvent::KeyPressed {
-            text: slint::platform::Key::Tab.into(),
-        });
+        // Tab 1 is Save To: the strip, then six controls, then OK. Eight stops in total.
+        for _ in 0..6 {
+            window.dispatch_event(WindowEvent::KeyPressed {
+                text: slint::platform::Key::Tab.into(),
+            });
+        }
         window.dispatch_event(WindowEvent::KeyPressed {
             text: slint::platform::Key::Return.into(),
         });
