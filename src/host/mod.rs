@@ -9,6 +9,7 @@ pub use protocol::{
 };
 pub use registry::{HOST_NAME, default_allowed_origins, register_host};
 
+use crate::settings::SaveSettings;
 use std::path::PathBuf;
 
 /// Locates the `kosmos-download-manager` main application executable.
@@ -34,10 +35,19 @@ pub fn find_app_executable() -> std::io::Result<PathBuf> {
     Ok(current_exe)
 }
 
+/// A refused download makes the extension let the browser keep it.
+fn download_refused(message: &HostMessage, settings: impl FnOnce() -> SaveSettings) -> bool {
+    matches!(message, HostMessage::Download { .. }) && !settings().browser_integration
+}
+
 /// Dispatches a message received from the browser extension.
 /// Either routes it to the running Kosmos Download Manager GUI via IPC,
 /// or launches the application if it is not currently running.
 pub async fn handle_host_message(message: HostMessage) -> HostResponse {
+    if download_refused(&message, SaveSettings::load) {
+        return HostResponse::error("browser_integration_disabled");
+    }
+
     crate::platform::allow_foreground_activation();
 
     // 1. Try sending to the currently running GUI instance
@@ -89,4 +99,39 @@ pub async fn run_native_messaging_host() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn off() -> SaveSettings {
+        SaveSettings {
+            browser_integration: false,
+            ..Default::default()
+        }
+    }
+
+    fn download() -> HostMessage {
+        HostMessage::Download {
+            url: "https://example.com/file.zip".to_string(),
+            filename: None,
+            referrer: None,
+            total_bytes: None,
+            auto_start: false,
+        }
+    }
+
+    #[test]
+    fn download_is_refused_only_when_browser_integration_is_off() {
+        assert!(!download_refused(&download(), SaveSettings::default));
+        assert!(download_refused(&download(), off));
+    }
+
+    #[test]
+    fn show_and_ping_are_never_refused() {
+        let unread = || unreachable!("Show and Ping must not read settings");
+        assert!(!download_refused(&HostMessage::Show, unread));
+        assert!(!download_refused(&HostMessage::Ping, unread));
+    }
 }
