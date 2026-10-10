@@ -1,9 +1,10 @@
 use super::format::{format_bytes, format_eta, format_speed};
-use super::view::{ChunkVisual, MainWindow, Navigation, Palette};
+use super::view::{ChunkVisual, FileProperties, MainWindow, Navigation, Palette};
 use crate::engine::{ChunkSnapshot, DownloadSnapshot, DownloadStatus};
 use crate::history::{HistoryEntry, downloaded_label, now_unix_ms};
 use crate::settings::SaveSettings;
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
+use std::path::Path;
 use tokio::sync::watch;
 
 pub(super) fn should_project_snapshot<T>(snapshot: &watch::Ref<'_, T>, initial: &mut bool) -> bool {
@@ -53,6 +54,54 @@ pub(super) fn history_table_item(
     }
 }
 
+/// The fields every download shares; the caller fills in status, size and result.
+fn base_properties(
+    settings: &SaveSettings,
+    filename: &str,
+    save_path: &Path,
+    url: &str,
+) -> FileProperties {
+    let file_type = settings.category_for_filename(filename);
+    FileProperties {
+        filename: filename.into(),
+        file_type: file_type.as_str().into(),
+        type_text: file_type.display_name().into(),
+        save_to: save_path.to_string_lossy().as_ref().into(),
+        address: url.into(),
+        ..Default::default()
+    }
+}
+
+pub(super) fn history_properties(settings: &SaveSettings, entry: &HistoryEntry) -> FileProperties {
+    FileProperties {
+        status_text: "Complete".into(),
+        size_text: format_bytes(entry.total_bytes).into(),
+        ..base_properties(settings, &entry.filename, &entry.save_path, &entry.url)
+    }
+}
+
+/// Properties of the active download. Status and size reuse the text the row shows; the result
+/// comes from the snapshot, so it outlives the "Download failed" dialog.
+pub(super) fn active_properties(
+    window: &MainWindow,
+    settings: &SaveSettings,
+    snap: &DownloadSnapshot,
+) -> FileProperties {
+    let filename = if snap.filename.is_empty() {
+        "New Download"
+    } else {
+        &snap.filename
+    };
+    FileProperties {
+        status_text: window.get_active_status(),
+        size_text: window.get_active_size(),
+        result_text: match &snap.status {
+            DownloadStatus::Failed(message) => message.as_str().into(),
+            _ => slint::SharedString::default(),
+        },
+        ..base_properties(settings, filename, &snap.save_path, &snap.url)
+    }
+}
 /// Reorders the listed rows for a header sort. Columns 0, 1 and 3 are sortable (File Name,
 /// Size, Date Added); any other column leaves the order untouched. Ties keep a stable order
 /// by row id.
@@ -230,6 +279,7 @@ fn finished_download(id: i32, snap: &DownloadSnapshot) -> HistoryEntry {
         save_path: snap.save_path.clone(),
         total_bytes: snap.total_bytes.unwrap_or(snap.downloaded_bytes),
         completed_unix_ms: now_unix_ms(),
+        description: String::new(),
     }
 }
 

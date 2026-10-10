@@ -1,0 +1,180 @@
+import { Palette } from "theme.slint";
+import { DialogInput, PointerButton } from "controls.slint";
+import { FileTypeIcon } from "icons.slint";
+
+export struct FileProperties {
+    filename: string,
+    file_type: string,
+    type_text: string,
+    status_text: string,
+    size_text: string,
+    save_to: string,
+    address: string,
+    /// Why the download stopped; empty while there is nothing to report.
+    result_text: string,
+}
+
+component FieldLabel inherits Text {
+    width: 72px;
+    font-size: 11px;
+    color: Palette.text-muted;
+    vertical-alignment: center;
+}
+
+component PropertyRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 8px;
+    FieldLabel { text: root.label; }
+    Text {
+        horizontal-stretch: 1;
+        text: root.value;
+        font-size: 12px;
+        color: Palette.text-primary;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+component InputRow inherits HorizontalLayout {
+    in property <string> label;
+    spacing: 8px;
+    FieldLabel { text: root.label; }
+}
+
+export component FilePropertiesDialog inherits Rectangle {
+    in property <FileProperties> properties;
+    in-out property <string> description: "";
+    callback dismiss(bool);
+    callback confirm(bool);
+
+    // Focus stops: 0 = Save to, 1 = Address, 2 = Description, 3 = Cancel, 4 = OK
+    private property <int> focus_index:
+        save_to_input.has_keyboard_focus ? 0 :
+        (address_input.has_keyboard_focus ? 1 :
+        (description_input.has_keyboard_focus ? 2 :
+        (cancel_button.has_keyboard_focus ? 3 :
+        (ok_button.has_keyboard_focus ? 4 : 2))));
+
+    function focus-item(index: int) {
+        if index == 0 { save_to_input.take-focus(); }
+        else if index == 1 { address_input.take-focus(); }
+        else if index == 2 { description_input.take-focus(); }
+        else if index == 3 { cancel_button.take-focus(); }
+        else { ok_button.take-focus(); }
+    }
+
+    background: Palette.overlay;
+    forward-focus: dialog_focus;
+    init => { root.focus-item(2); }
+
+    TouchArea {}
+
+    dialog_focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.dismiss(true);
+                return accept;
+            }
+            if event.text == Key.Tab {
+                root.focus-item(event.modifiers.shift
+                    ? (root.focus_index == 0 ? 4 : root.focus_index - 1)
+                    : mod(root.focus_index + 1, 5));
+                return accept;
+            }
+            return reject;
+        }
+
+        Rectangle {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            width: 480px;
+            height: content.preferred-height;
+            background: Palette.surface;
+            accessible-role: groupbox;
+            accessible-label: "File Properties";
+
+            content := VerticalLayout {
+                padding: 20px;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 10px;
+                    FileTypeIcon { file-type: root.properties.file_type; }
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.properties.filename;
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: Palette.text-primary;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+
+                Rectangle { height: 4px; }
+
+                PropertyRow { height: 20px; label: "Type:"; value: root.properties.type_text; }
+                PropertyRow { height: 20px; label: "Status:"; value: root.properties.status_text; }
+                PropertyRow { height: 20px; label: "Size:"; value: root.properties.size_text; }
+
+                if root.properties.result_text != "": PropertyRow {
+                    height: 20px;
+                    label: "Result:";
+                    value: root.properties.result_text;
+                }
+
+                Rectangle { height: 4px; }
+
+                InputRow {
+                    label: "Save to:";
+                    save_to_input := DialogInput {
+                        text: root.properties.save_to;
+                        label: "Save to";
+                        read-only: true;
+                        accepted => { root.confirm(true); }
+                    }
+                }
+
+                InputRow {
+                    label: "Address:";
+                    address_input := DialogInput {
+                        text: root.properties.address;
+                        label: "Address";
+                        read-only: true;
+                        accepted => { root.confirm(true); }
+                    }
+                }
+
+                InputRow {
+                    label: "Description:";
+                    description_input := DialogInput {
+                        text <=> root.description;
+                        label: "Description";
+                        accepted => { root.confirm(true); }
+                    }
+                }
+
+                Rectangle { height: 4px; }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+
+                    cancel_button := PointerButton {
+                        text: "Cancel";
+                        clicked(from_keyboard) => { root.dismiss(from_keyboard); }
+                    }
+
+                    ok_button := PointerButton {
+                        text: "OK";
+                        primary: true;
+                        clicked(from_keyboard) => { root.confirm(from_keyboard); }
+                    }
+                }
+            }
+        }
+    }
+}
