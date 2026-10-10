@@ -141,6 +141,8 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 load_options_categories(&window, &settings);
                 window.set_options_use_kdm_folder(settings.use_kdm_folder);
                 window.set_streams_count(f32::from(settings.streams));
+                window.set_options_browser_integration(settings.browser_integration);
+                window.set_options_ask_before_delete(settings.ask_before_delete);
                 window.set_options_history_limit_index(settings.history_limit_index());
             }
 
@@ -295,6 +297,8 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     default_dir,
                     use_kdm_folder: use_kdm,
                     streams: window.get_streams_count().round() as u8,
+                    browser_integration: window.get_options_browser_integration(),
+                    ask_before_delete: window.get_options_ask_before_delete(),
                     history_limit: SaveSettings::history_limit_for_index(
                         window.get_options_history_limit_index(),
                     ),

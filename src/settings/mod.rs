@@ -20,6 +20,14 @@ const fn default_streams() -> u8 {
     8
 }
 
+const fn default_browser_integration() -> bool {
+    true
+}
+
+const fn default_true() -> bool {
+    true
+}
+
 /// Choices for "Keep at most N downloads", smallest first. Keep in step with the combo in
 /// `options_dialog.slint`; a saved value outside this range is clamped on load.
 const HISTORY_LIMITS: [usize; 5] = [100, 250, 500, 1_000, 5_000];
@@ -47,6 +55,11 @@ pub struct SaveSettings {
     /// the user's own list.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub disabled_categories: BTreeSet<Category>,
+    #[serde(default = "default_browser_integration")]
+    pub browser_integration: bool,
+    /// Ask before deleting a download. Off removes it from the list and keeps every file.
+    #[serde(default = "default_true")]
+    pub ask_before_delete: bool,
     /// Finished downloads kept in the history, within [`HISTORY_LIMITS`] on load.
     #[serde(default = "default_history_limit")]
     pub history_limit: usize,
@@ -61,6 +74,8 @@ impl Default for SaveSettings {
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
+            browser_integration: default_browser_integration(),
+            ask_before_delete: true,
             history_limit: default_history_limit(),
         }
     }
@@ -357,6 +372,8 @@ mod tests {
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
+            browser_integration: true,
+            ask_before_delete: false,
             history_limit: 250,
         };
 
@@ -418,6 +435,40 @@ mod tests {
         }
         assert_eq!(SaveSettings::history_limit_for_index(-1), 1_000);
         assert_eq!(SaveSettings::history_limit_for_index(9), 1_000);
+    }
+
+    #[test]
+    fn test_browser_integration_default_and_round_trip() {
+        let dir = std::env::temp_dir().join(format!("kosmos_browser_{}", std::process::id()));
+        let path = dir.join("save_settings.json");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
+        assert!(SaveSettings::load_from(&path).unwrap().browser_integration);
+
+        let off = SaveSettings {
+            browser_integration: false,
+            ..Default::default()
+        };
+        off.save_to(&path).unwrap();
+        assert!(!SaveSettings::load_from(&path).unwrap().browser_integration);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_ask_before_delete_defaults_on_for_old_settings_files() {
+        let path = std::env::temp_dir().join(format!("kosmos_confirm_{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
+        assert!(SaveSettings::load_from(&path).unwrap().ask_before_delete);
+        std::fs::write(
+            &path,
+            r#"{"default_dir":"D:\\Downloads","ask_before_delete":false}"#,
+        )
+        .unwrap();
+        assert!(!SaveSettings::load_from(&path).unwrap().ask_before_delete);
+        let _ = std::fs::remove_file(&path);
+        assert!(SaveSettings::default().ask_before_delete);
     }
 
     #[test]

@@ -24,6 +24,8 @@ export component OptionsDialog inherits Rectangle {
     in-out property <int> selected_tab: 0;
     in-out property <bool> launch_on_startup: false;
     in property <bool> startup_option_visible: false;
+    in-out property <bool> browser_integration: true;
+    in-out property <bool> ask_before_delete: true;
 
     // Save To tab. Index 0 is the default directory.
     in-out property <int> save_to_category: 0;
@@ -54,11 +56,11 @@ export component OptionsDialog inherits Rectangle {
     ];
 
     private property <bool> general_tab: root.selected_tab == 0;
-    private property <bool> startup_stop: root.startup_option_visible && root.selected_tab == 0;
-    private property <int> general_first_stop: root.startup_stop ? 2 : 1;
+    private property <bool> startup_stop: root.startup_option_visible && root.general_tab;
+    private property <int> general_first_stop: root.startup_option_visible ? 2 : 1;
     private property <bool> save_to_tab: root.selected_tab == 1;
     private property <bool> downloads_tab: root.selected_tab == 2;
-    private property <int> stop_count: root.general_tab ? root.general_first_stop + 4
+    private property <int> stop_count: root.general_tab ? root.general_first_stop + 6
         : (root.save_to_tab ? (root.save_to_category == 0 ? 8 : 9) : (root.downloads_tab ? 4 : 3));
 
     private property <string> current_category_name:
@@ -68,6 +70,8 @@ export component OptionsDialog inherits Rectangle {
 
     private property <int> focus_index: strip_focus.has-focus ? 0
         : (root.startup_stop && startup_box.has-keyboard-focus ? 1
+        : (root.general_tab && browser_box.has-keyboard-focus ? root.general_first_stop
+        : (root.general_tab && delete_box.has-keyboard-focus ? root.general_first_stop + 1
         : (root.save_to_tab && category_combo.has_keyboard_focus ? 1
         : (root.save_to_tab && path_input.has_keyboard_focus ? 2
         : (root.save_to_tab && browse_button.has-keyboard-focus ? 3
@@ -75,10 +79,10 @@ export component OptionsDialog inherits Rectangle {
         : (root.save_to_tab && root.save_to_category != 0 && types_input.has-keyboard_focus ? 5
         : (root.save_to_tab && kdm_box.has-keyboard-focus ? (root.save_to_category == 0 ? 5 : 6)
         : (root.downloads_tab && streams_slider.has_keyboard_focus ? 1
-        : (root.general_tab && history_limit_combo.has_keyboard_focus ? root.general_first_stop
-        : (root.general_tab && clear_button.has-keyboard-focus ? root.general_first_stop + 1
+        : (root.general_tab && history_limit_combo.has_keyboard_focus ? root.general_first_stop + 2
+        : (root.general_tab && clear_button.has-keyboard-focus ? root.general_first_stop + 3
         : (ok_button.has-keyboard-focus ? root.stop_count - 2
-        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))))));
+        : (cancel_button.has-keyboard-focus ? root.stop_count - 1 : -1))))))))))))));
 
     private property <bool> keyboard_focused: false;
 
@@ -101,8 +105,10 @@ export component OptionsDialog inherits Rectangle {
         root.keyboard_focused = index == 0;
         if index == 0 { strip_focus.focus(); }
         else if root.startup_stop && index == 1 { startup_box.take-focus(); }
-        else if root.general_tab && index == root.general_first_stop { history_limit_combo.take-focus(); }
-        else if root.general_tab && index == root.general_first_stop + 1 { clear_button.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop { browser_box.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 1 { delete_box.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 2 { history_limit_combo.take-focus(); }
+        else if root.general_tab && index == root.general_first_stop + 3 { clear_button.take-focus(); }
         else if root.save_to_tab && index == 1 { category_combo.take-focus(); }
         else if root.save_to_tab && index == 2 { path_input.take-focus(); }
         else if root.save_to_tab && index == 3 { browse_button.take-focus(); }
@@ -269,8 +275,19 @@ export component OptionsDialog inherits Rectangle {
 
                             startup_box := DialogCheckBox {
                                 visible: root.startup_stop;
+                                height: root.startup_option_visible ? 36px : 0px;
                                 checked <=> root.launch_on_startup;
                                 text: "Launch Kosmos Download Manager on startup";
+                            }
+
+                            browser_box := DialogCheckBox {
+                                checked <=> root.browser_integration;
+                                text: "Take over downloads from the browser";
+                            }
+
+                            delete_box := DialogCheckBox {
+                                checked <=> root.ask_before_delete;
+                                text: "Ask before deleting a download";
                             }
 
                             HorizontalLayout {

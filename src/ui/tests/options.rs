@@ -46,8 +46,8 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(slint::platform::Key::Tab.into());
     press(" ".into());
     assert!(ui.get_options_launch_on_startup());
-    // History limit and Clear history come before OK.
-    for _ in 0..3 {
+    // Browser, delete, history limit and Clear history come before OK.
+    for _ in 0..5 {
         press(slint::platform::Key::Tab.into());
     }
     press(slint::platform::Key::Return.into());
@@ -66,6 +66,177 @@ fn options_startup_checkbox_commits_on_ok() -> Result<(), Box<dyn std::error::Er
     press(slint::platform::Key::Escape.into());
     assert!(!ui.get_show_options_dialog());
     assert_eq!(*commits.borrow(), vec![true], "Escape discards the change");
+
+    Ok(())
+}
+
+/// Walks the General tab by keyboard: toggles the delete-confirmation checkbox, then checks that
+/// OK and Cancel follow it and that Tab wraps around after Cancel.
+fn walk_general_tab(startup_visible: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+    let tab = || press(slint::platform::Key::Tab.into());
+
+    ui.set_startup_option_visible(startup_visible);
+    ui.set_show_options_dialog(true);
+    render();
+    assert!(ui.get_options_ask_before_delete(), "asks by default");
+
+    // Tab strip, the startup checkbox when shown, the browser checkbox, then the delete one.
+    for _ in 0..if startup_visible { 4 } else { 3 } {
+        tab();
+    }
+    press(" ".into());
+    assert!(!ui.get_options_ask_before_delete());
+
+    // History limit, Clear, OK, Cancel, the tab strip, and back to the first checkbox.
+    for _ in 0..6 {
+        tab();
+    }
+    press(" ".into());
+    if startup_visible {
+        assert!(ui.get_options_launch_on_startup());
+        assert!(!ui.get_options_ask_before_delete());
+    } else {
+        assert!(
+            !ui.get_options_browser_integration(),
+            "the first checkbox again"
+        );
+    }
+
+    press(slint::platform::Key::Escape.into());
+    assert!(!ui.get_show_options_dialog());
+    Ok(())
+}
+
+#[test]
+fn options_general_tab_delete_confirmation_is_a_stop_with_startup_option()
+-> Result<(), Box<dyn std::error::Error>> {
+    walk_general_tab(true)
+}
+
+#[test]
+fn options_general_tab_delete_confirmation_is_a_stop_without_startup_option()
+-> Result<(), Box<dyn std::error::Error>> {
+    walk_general_tab(false)
+}
+
+#[test]
+fn options_browser_checkbox_is_a_tab_stop_before_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    // The startup checkbox is hidden off Windows, so the stop count differs between the runs.
+    for (startup_visible, tabs_to_checkbox) in [(false, 2), (true, 3)] {
+        ui.set_startup_option_visible(startup_visible);
+        ui.set_show_options_dialog(true);
+        render();
+
+        let before = ui.get_options_browser_integration();
+        for _ in 0..tabs_to_checkbox {
+            press(slint::platform::Key::Tab.into());
+        }
+        press(" ".into());
+        assert_eq!(
+            ui.get_options_browser_integration(),
+            !before,
+            "Space toggles the browser checkbox (startup option visible: {startup_visible})"
+        );
+        for _ in 0..4 {
+            press(slint::platform::Key::Tab.into());
+        }
+        press(slint::platform::Key::Return.into());
+        assert!(
+            !ui.get_show_options_dialog(),
+            "OK follows the browser, delete, history limit and Clear controls (startup option visible: {startup_visible})"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn options_browser_checkbox_commits_on_ok_and_not_on_cancel()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    ui.show()?;
+    window.set_size(slint::PhysicalSize::new(960, 540));
+
+    let commits = Rc::new(RefCell::new(Vec::new()));
+    ui.on_commit_options({
+        let commits = commits.clone();
+        let ui = ui.as_weak();
+        move |_| {
+            if let Some(ui) = ui.upgrade() {
+                commits
+                    .borrow_mut()
+                    .push(ui.get_options_browser_integration());
+            }
+        }
+    });
+
+    let render = || {
+        window.draw_if_needed(|renderer| {
+            let mut pixels = vec![slint::Rgb8Pixel::default(); 960 * 540];
+            renderer.render(&mut pixels, 960);
+        });
+    };
+    let press = |text: slint::SharedString| {
+        window.dispatch_event(WindowEvent::KeyPressed { text });
+    };
+
+    ui.set_options_browser_integration(true);
+    ui.set_show_options_dialog(true);
+    render();
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
+    press(" ".into());
+    press(slint::platform::Key::Escape.into());
+    assert!(
+        commits.borrow().is_empty(),
+        "Cancel must not commit the toggle"
+    );
+
+    ui.set_options_browser_integration(true);
+    ui.set_show_options_dialog(true);
+    render();
+    press(slint::platform::Key::Tab.into());
+    press(slint::platform::Key::Tab.into());
+    press(" ".into());
+    for _ in 0..4 {
+        press(slint::platform::Key::Tab.into());
+    }
+    press(slint::platform::Key::Return.into());
+    assert_eq!(
+        *commits.borrow(),
+        vec![false],
+        "OK commits the unchecked box"
+    );
 
     Ok(())
 }
@@ -148,7 +319,7 @@ fn options_general_tab_history_controls_are_keyboard_reachable()
         window.dispatch_event(WindowEvent::KeyPressed { text });
     };
 
-    for (startup_visible, tabs_to_limit) in [(false, 2), (true, 3)] {
+    for (startup_visible, tabs_to_limit) in [(false, 4), (true, 5)] {
         ui.set_startup_option_visible(startup_visible);
         ui.set_options_history_limit_index(3);
         ui.set_show_options_dialog(true);
