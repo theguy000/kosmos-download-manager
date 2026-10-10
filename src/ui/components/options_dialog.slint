@@ -24,7 +24,7 @@ export component OptionsDialog inherits Rectangle {
     in-out property <int> selected_tab: 0;
     in-out property <bool> launch_on_startup: false;
     in property <bool> startup_option_visible: false;
-    in-out property <bool> confirm_delete: true;
+    in-out property <bool> ask_before_delete: true;
 
     // Save To tab. Index 0 is the default directory.
     in-out property <int> save_to_category: 0;
@@ -259,7 +259,7 @@ export component OptionsDialog inherits Rectangle {
                             }
 
                             delete_box := DialogCheckBox {
-                                checked <=> root.confirm_delete;
+                                checked <=> root.ask_before_delete;
                                 text: "Ask before deleting a download";
                             }
                         }

@@ -141,7 +141,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                 load_options_categories(&window, &settings);
                 window.set_options_use_kdm_folder(settings.use_kdm_folder);
                 window.set_streams_count(f32::from(settings.streams));
-                window.set_options_confirm_delete(settings.confirm_delete);
+                window.set_options_ask_before_delete(settings.ask_before_delete);
             }
 
             let window_weak = window_weak.clone();
@@ -295,7 +295,7 @@ pub(crate) fn bind_options_handlers(window: &MainWindow, state: &AppState) {
                     default_dir,
                     use_kdm_folder: use_kdm,
                     streams: window.get_streams_count().round() as u8,
-                    confirm_delete: window.get_options_confirm_delete(),
+                    ask_before_delete: window.get_options_ask_before_delete(),
                     ..Default::default()
                 };
                 for option in &categories {

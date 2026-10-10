@@ -90,14 +90,14 @@ fn walk_general_tab(startup_visible: bool) -> Result<(), Box<dyn std::error::Err
     ui.set_startup_option_visible(startup_visible);
     ui.set_show_options_dialog(true);
     render();
-    assert!(ui.get_options_confirm_delete(), "asks by default");
+    assert!(ui.get_options_ask_before_delete(), "asks by default");
 
     // Tab strip, the startup checkbox when shown, then the delete confirmation checkbox.
     for _ in 0..if startup_visible { 3 } else { 2 } {
         tab();
     }
     press(" ".into());
-    assert!(!ui.get_options_confirm_delete());
+    assert!(!ui.get_options_ask_before_delete());
 
     // OK, Cancel, the tab strip, and back to the first checkbox.
     for _ in 0..4 {
@@ -106,9 +106,12 @@ fn walk_general_tab(startup_visible: bool) -> Result<(), Box<dyn std::error::Err
     press(" ".into());
     if startup_visible {
         assert!(ui.get_options_launch_on_startup());
-        assert!(!ui.get_options_confirm_delete());
+        assert!(!ui.get_options_ask_before_delete());
     } else {
-        assert!(ui.get_options_confirm_delete(), "the same checkbox again");
+        assert!(
+            ui.get_options_ask_before_delete(),
+            "the same checkbox again"
+        );
     }
 
     press(slint::platform::Key::Escape.into());

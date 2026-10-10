@@ -46,7 +46,7 @@ fn a_missing_file_counts_as_deleted() {
     );
 }
 
-type Bound = (
+type BoundWindow = (
     MainWindow,
     AppState,
     mpsc::Receiver<DownloadAction>,
@@ -55,20 +55,36 @@ type Bound = (
 
 /// Delete handlers bound to a window over a temporary history file and chosen settings.
 fn bound_window(
-    confirm_delete: bool,
+    ask_before_delete: bool,
     history: &TempFile,
-) -> Result<Bound, Box<dyn std::error::Error>> {
+) -> Result<BoundWindow, Box<dyn std::error::Error>> {
     let (_window, _clipboard) = install_test_platform()?;
     let ui = MainWindow::new()?;
     let (action_tx, action_rx) = mpsc::channel(1);
     let (snapshot_tx, snapshot_rx) = watch::channel(DownloadSnapshot::default());
     let settings = SaveSettings {
-        confirm_delete,
+        ask_before_delete,
         ..Default::default()
     };
     let state = AppState::from_parts(settings, history.store(), action_tx, snapshot_rx);
     bind_delete_handlers(&ui, &state);
     Ok((ui, state, action_rx, snapshot_tx))
+}
+
+/// Makes session 3 the displayed active download with `status`.
+fn show_active_download(
+    state: &AppState,
+    snapshots: &watch::Sender<DownloadSnapshot>,
+    status: DownloadStatus,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let snapshot = DownloadSnapshot {
+        session_id: 3,
+        status,
+        ..Default::default()
+    };
+    snapshots.send(snapshot.clone())?;
+    *state.displayed_delete_target.borrow_mut() = DeleteTarget::displayed(&snapshot);
+    Ok(())
 }
 
 #[test]
@@ -110,13 +126,7 @@ fn active_download_is_removed_without_asking_and_keeps_the_partial_file()
 -> Result<(), Box<dyn std::error::Error>> {
     let history = TempFile::new("delete-active-off");
     let (ui, state, mut actions, snapshots) = bound_window(false, &history)?;
-    let snapshot = DownloadSnapshot {
-        session_id: 3,
-        status: DownloadStatus::Downloading,
-        ..Default::default()
-    };
-    snapshots.send(snapshot.clone())?;
-    *state.displayed_delete_target.borrow_mut() = DeleteTarget::displayed(&snapshot);
+    show_active_download(&state, &snapshots, DownloadStatus::Downloading)?;
 
     ui.set_selected_row(0);
     ui.invoke_request_delete_selected();
@@ -137,13 +147,7 @@ fn active_download_is_removed_without_asking_and_keeps_the_partial_file()
 fn active_download_still_asks_by_default() -> Result<(), Box<dyn std::error::Error>> {
     let history = TempFile::new("delete-active-on");
     let (ui, state, mut actions, snapshots) = bound_window(true, &history)?;
-    let snapshot = DownloadSnapshot {
-        session_id: 3,
-        status: DownloadStatus::Downloading,
-        ..Default::default()
-    };
-    snapshots.send(snapshot.clone())?;
-    *state.displayed_delete_target.borrow_mut() = DeleteTarget::displayed(&snapshot);
+    show_active_download(&state, &snapshots, DownloadStatus::Downloading)?;
 
     ui.set_selected_row(0);
     ui.invoke_request_delete_selected();
@@ -153,5 +157,27 @@ fn active_download_still_asks_by_default() -> Result<(), Box<dyn std::error::Err
         actions.try_recv().is_err(),
         "nothing is sent until confirmed"
     );
+    Ok(())
+}
+
+#[test]
+fn delete_completed_removes_without_asking_and_keeps_the_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    let history = TempFile::new("delete-completed-off");
+    let (ui, state, mut actions, snapshots) = bound_window(false, &history)?;
+    show_active_download(&state, &snapshots, DownloadStatus::Completed)?;
+
+    ui.invoke_request_delete_completed();
+
+    assert!(!ui.get_show_delete_dialog());
+    assert!(matches!(
+        actions.try_recv(),
+        Ok(DownloadAction::Remove {
+            expected_session_id: 3,
+            delete_file: false,
+            completed_only: true,
+            ..
+        })
+    ));
     Ok(())
 }

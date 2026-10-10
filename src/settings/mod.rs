@@ -43,7 +43,7 @@ pub struct SaveSettings {
     pub disabled_categories: BTreeSet<Category>,
     /// Ask before deleting a download. Off removes it from the list and keeps every file.
     #[serde(default = "default_true")]
-    pub confirm_delete: bool,
+    pub ask_before_delete: bool,
 }
 
 impl Default for SaveSettings {
@@ -55,7 +55,7 @@ impl Default for SaveSettings {
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
-            confirm_delete: true,
+            ask_before_delete: true,
         }
     }
 }
@@ -332,7 +332,7 @@ mod tests {
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
-            confirm_delete: false,
+            ask_before_delete: false,
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -362,18 +362,18 @@ mod tests {
     }
 
     #[test]
-    fn test_confirm_delete_defaults_on_for_old_settings_files() {
+    fn test_ask_before_delete_defaults_on_for_old_settings_files() {
         let path = std::env::temp_dir().join(format!("kosmos_confirm_{}.json", std::process::id()));
         std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
-        assert!(SaveSettings::load_from(&path).unwrap().confirm_delete);
+        assert!(SaveSettings::load_from(&path).unwrap().ask_before_delete);
         std::fs::write(
             &path,
-            r#"{"default_dir":"D:\\Downloads","confirm_delete":false}"#,
+            r#"{"default_dir":"D:\\Downloads","ask_before_delete":false}"#,
         )
         .unwrap();
-        assert!(!SaveSettings::load_from(&path).unwrap().confirm_delete);
+        assert!(!SaveSettings::load_from(&path).unwrap().ask_before_delete);
         let _ = std::fs::remove_file(&path);
-        assert!(SaveSettings::default().confirm_delete);
+        assert!(SaveSettings::default().ask_before_delete);
     }
 
     #[test]
