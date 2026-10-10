@@ -1,7 +1,7 @@
 //! On-disk record of finished downloads.
 //!
-//! The log is rewritten whenever a download finishes, which keeps it capped at
-//! [`MAX_HISTORY_ENTRIES`] records and never depends on what an earlier run left behind. It
+//! The log is rewritten whenever a download finishes, which keeps it capped at the configured
+//! limit and never depends on what an earlier run left behind. It
 //! lives under the user's local application data, because the record is machine-specific and
 //! must not roam.
 
@@ -11,7 +11,8 @@ use thiserror::Error;
 
 const HISTORY_FORMAT_HEADER: &str = "kosmos-history-v1";
 const HISTORY_FILE_NAME: &str = "history.jsonl";
-const MAX_HISTORY_ENTRIES: usize = 1_000;
+/// Records kept unless the settings say otherwise.
+pub(crate) const MAX_HISTORY_ENTRIES: usize = 1_000;
 
 #[derive(Debug, Error)]
 pub enum HistoryError {
@@ -48,20 +49,29 @@ pub struct HistoryEntry {
 pub struct HistoryStore {
     path: PathBuf,
     entries: Vec<HistoryEntry>,
+    limit: usize,
 }
 
 impl HistoryStore {
-    pub fn load() -> Self {
-        Self::load_from(default_history_path())
+    pub fn load(limit: usize) -> Self {
+        Self::load_limited(default_history_path(), limit)
     }
 
-    /// Unusable lines are skipped rather than reported: a partially written or hand-edited
-    /// file must never stop the application from starting.
     pub fn load_from(path: PathBuf) -> Self {
+        Self::load_limited(path, MAX_HISTORY_ENTRIES)
+    }
+
+    /// Keeps the newest `limit` records. Unusable lines are skipped rather than reported: a
+    /// partially written or hand-edited file must never stop the application from starting.
+    pub fn load_limited(path: PathBuf, limit: usize) -> Self {
         let entries = std::fs::read_to_string(&path)
-            .map(|text| parse_history(&text, MAX_HISTORY_ENTRIES))
+            .map(|text| parse_history(&text, limit))
             .unwrap_or_default();
-        Self { path, entries }
+        Self {
+            path,
+            entries,
+            limit,
+        }
     }
 
     /// Retained downloads, oldest first.
@@ -93,12 +103,28 @@ impl HistoryStore {
         self.rewrite()
     }
 
-    /// Keeps `entry` and writes the log back, keeping it at most [`MAX_HISTORY_ENTRIES`] long.
+    /// Keeps `entry` and writes the log back, keeping it at most the limit long.
     pub fn record(&mut self, entry: HistoryEntry) -> Result<(), HistoryError> {
         self.entries.push(entry);
-        if self.entries.len() > MAX_HISTORY_ENTRIES {
+        if self.entries.len() > self.limit {
             self.entries.remove(0);
         }
+        self.rewrite()
+    }
+
+    /// Changes the limit, dropping the oldest records when the log is now too long.
+    pub fn set_limit(&mut self, limit: usize) -> Result<(), HistoryError> {
+        self.limit = limit;
+        if self.entries.len() > limit {
+            self.entries.drain(..self.entries.len() - limit);
+            self.rewrite()?;
+        }
+        Ok(())
+    }
+
+    /// Removes every record and writes the empty log back.
+    pub fn clear(&mut self) -> Result<(), HistoryError> {
+        self.entries.clear();
         self.rewrite()
     }
 

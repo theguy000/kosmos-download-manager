@@ -20,6 +20,14 @@ const fn default_streams() -> u8 {
     8
 }
 
+/// Choices for "Keep at most N downloads", smallest first. Keep in step with the combo in
+/// `options_dialog.slint`; a saved value outside this range is clamped on load.
+pub const HISTORY_LIMITS: [usize; 5] = [100, 250, 500, 1_000, 5_000];
+
+const fn default_history_limit() -> usize {
+    crate::history::MAX_HISTORY_ENTRIES
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
@@ -37,6 +45,9 @@ pub struct SaveSettings {
     /// the user's own list.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub disabled_categories: BTreeSet<Category>,
+    /// Finished downloads kept in the history, within [`HISTORY_LIMITS`] on load.
+    #[serde(default = "default_history_limit")]
+    pub history_limit: usize,
 }
 
 impl Default for SaveSettings {
@@ -48,6 +59,7 @@ impl Default for SaveSettings {
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
+            history_limit: default_history_limit(),
         }
     }
 }
@@ -263,6 +275,24 @@ impl SaveSettings {
         (path != Self::default_subfolder(default_dir, category)).then_some(path)
     }
 
+    /// Position of `history_limit` in [`HISTORY_LIMITS`], rounding up to the next choice.
+    pub fn history_limit_index(&self) -> i32 {
+        let last = HISTORY_LIMITS.len() - 1;
+        let index = HISTORY_LIMITS
+            .iter()
+            .position(|&limit| limit >= self.history_limit)
+            .unwrap_or(last);
+        i32::try_from(index).unwrap_or_default()
+    }
+
+    /// The limit behind a combo position, or the default for a position that is not a choice.
+    pub fn history_limit_for_index(index: i32) -> usize {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| HISTORY_LIMITS.get(index))
+            .map_or_else(default_history_limit, |&limit| limit)
+    }
+
     pub fn load() -> Self {
         Self::load_from(&settings_path()).unwrap_or_default()
     }
@@ -278,6 +308,8 @@ impl SaveSettings {
             .retain(|_, path| !path.as_os_str().is_empty());
         settings.disabled_categories.remove(&Category::General);
         settings.streams = settings.streams.clamp(1, MAX_STREAMS);
+        let [fewest, .., most] = HISTORY_LIMITS;
+        settings.history_limit = settings.history_limit.clamp(fewest, most);
         Some(settings)
     }
 
@@ -324,6 +356,7 @@ mod tests {
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
+            history_limit: 250,
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -350,6 +383,46 @@ mod tests {
             assert_eq!(SaveSettings::load_from(&path).unwrap().streams, expected);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn history_limit_defaults_clamps_and_maps_to_the_combo() {
+        let path =
+            std::env::temp_dir().join(format!("kosmos_history_limit_{}.json", std::process::id()));
+        for (extra, expected) in [
+            ("", 1_000),
+            (r#","history_limit":0"#, 100),
+            (r#","history_limit":777"#, 777),
+            (r#","history_limit":99999"#, 5_000),
+        ] {
+            std::fs::write(
+                &path,
+                format!(r#"{{"default_dir":"D:\\Downloads"{extra}}}"#),
+            )
+            .unwrap();
+            assert_eq!(
+                SaveSettings::load_from(&path).unwrap().history_limit,
+                expected
+            );
+        }
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(SaveSettings::default().history_limit, 1_000);
+        for (index, limit) in HISTORY_LIMITS.into_iter().enumerate() {
+            let settings = SaveSettings {
+                history_limit: limit,
+                ..Default::default()
+            };
+            assert_eq!(settings.history_limit_index(), index as i32);
+            assert_eq!(SaveSettings::history_limit_for_index(index as i32), limit);
+        }
+        let between = SaveSettings {
+            history_limit: 777,
+            ..Default::default()
+        };
+        assert_eq!(between.history_limit_index(), 3, "rounds up to 1,000");
+        assert_eq!(SaveSettings::history_limit_for_index(-1), 1_000);
+        assert_eq!(SaveSettings::history_limit_for_index(9), 1_000);
     }
 
     #[test]

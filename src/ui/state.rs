@@ -59,12 +59,9 @@ impl AppState {
         action_tx: mpsc::Sender<DownloadAction>,
         snapshot_rx: watch::Receiver<DownloadSnapshot>,
     ) -> Self {
-        Self::from_parts(
-            SaveSettings::load(),
-            HistoryStore::load(),
-            action_tx,
-            snapshot_rx,
-        )
+        let save_settings = SaveSettings::load();
+        let history_store = HistoryStore::load(save_settings.history_limit);
+        Self::from_parts(save_settings, history_store, action_tx, snapshot_rx)
     }
 
     /// Builds the state around already loaded settings and history, so tests can keep off the

@@ -254,6 +254,67 @@ fn recording_keeps_the_log_at_the_cap() {
     assert_eq!(file.store().entries().len(), MAX_HISTORY_ENTRIES);
 }
 
+fn ids(store: &HistoryStore) -> Vec<i32> {
+    store.entries().iter().map(|entry| entry.id).collect()
+}
+
+#[test]
+fn clear_empties_memory_and_disk_but_not_downloaded_files() {
+    let file = TempFile::new("clear");
+    let download = TempFile::new("clear-download");
+    std::fs::write(download.path(), b"data").unwrap();
+    let mut kept = entry(1, "a.bin", 4);
+    kept.save_path = download.path().to_path_buf();
+    let mut store = file.store();
+    store.record(kept).unwrap();
+    store.record(entry(2, "b.bin", 2)).unwrap();
+
+    store.clear().unwrap();
+
+    assert_eq!(store.entries(), []);
+    assert_eq!(file.read(), format!("{HISTORY_FORMAT_HEADER}\n"));
+    assert_eq!(file.store().entries(), []);
+    assert!(download.path().exists(), "clearing never deletes files");
+}
+
+#[test]
+fn the_limit_trims_on_load_and_on_record() {
+    let file = TempFile::new("limit");
+    {
+        let mut store = file.store();
+        for id in 1..=5 {
+            store.record(entry(id, "f.bin", 1)).unwrap();
+        }
+    }
+
+    let mut store = HistoryStore::load_limited(file.path().to_path_buf(), 3);
+    assert_eq!(ids(&store), [3, 4, 5], "load keeps the newest records");
+
+    store.record(entry(6, "f.bin", 1)).unwrap();
+    assert_eq!(ids(&store), [4, 5, 6]);
+    assert_eq!(file.line_count(), 4, "one header line and three records");
+}
+
+#[test]
+fn lowering_the_limit_trims_the_log_and_raising_it_keeps_it() {
+    let file = TempFile::new("set-limit");
+    let mut store = file.store();
+    for id in 1..=5 {
+        store.record(entry(id, "f.bin", 1)).unwrap();
+    }
+
+    store.set_limit(2).unwrap();
+    assert_eq!(ids(&store), [4, 5]);
+    assert_eq!(ids(&file.store()), [4, 5], "the log is rewritten");
+
+    store.set_limit(10).unwrap();
+    assert_eq!(ids(&store), [4, 5], "raising the limit restores nothing");
+    for id in 6..=9 {
+        store.record(entry(id, "f.bin", 1)).unwrap();
+    }
+    assert_eq!(store.entries().len(), 6);
+}
+
 #[test]
 fn rejected_records_are_ignored() {
     let file = TempFile::new("rejected");
