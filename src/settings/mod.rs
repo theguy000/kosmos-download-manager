@@ -20,6 +20,10 @@ const fn default_streams() -> u8 {
     8
 }
 
+const fn default_browser_integration() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveSettings {
     pub default_dir: PathBuf,
@@ -37,6 +41,8 @@ pub struct SaveSettings {
     /// the user's own list.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub disabled_categories: BTreeSet<Category>,
+    #[serde(default = "default_browser_integration")]
+    pub browser_integration: bool,
 }
 
 impl Default for SaveSettings {
@@ -48,6 +54,7 @@ impl Default for SaveSettings {
             category_dirs: BTreeMap::new(),
             file_types: BTreeMap::new(),
             disabled_categories: BTreeSet::new(),
+            browser_integration: default_browser_integration(),
         }
     }
 }
@@ -324,6 +331,7 @@ mod tests {
             ]),
             file_types: BTreeMap::from([(Category::Video, vec!["webm".to_string()])]),
             disabled_categories: BTreeSet::from([Category::Torrents]),
+            browser_integration: true,
         };
 
         assert!(original.save_to(&path).is_ok());
@@ -350,6 +358,25 @@ mod tests {
             assert_eq!(SaveSettings::load_from(&path).unwrap().streams, expected);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_browser_integration_default_and_round_trip() {
+        let dir = std::env::temp_dir().join(format!("kosmos_browser_{}", std::process::id()));
+        let path = dir.join("save_settings.json");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(&path, r#"{"default_dir":"D:\\Downloads"}"#).unwrap();
+        assert!(SaveSettings::load_from(&path).unwrap().browser_integration);
+
+        let off = SaveSettings {
+            browser_integration: false,
+            ..Default::default()
+        };
+        off.save_to(&path).unwrap();
+        assert!(!SaveSettings::load_from(&path).unwrap().browser_integration);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
