@@ -74,8 +74,9 @@ pub fn run_app(
     // IPC server to receive downloads and show requests from browser extension and native host
     {
         let window_weak = main_window.as_weak();
+        let error_window = window_weak.clone();
         tokio::spawn(async move {
-            let _ = crate::host::start_ipc_server(move |msg| match msg {
+            let result = crate::host::start_ipc_server(move |msg| match msg {
                 crate::host::HostMessage::Download {
                     url,
                     filename: _,
@@ -107,6 +108,12 @@ pub fn run_app(
                 }
             })
             .await;
+            if let Err(error) = result {
+                let message = format!("Browser downloads are unavailable: {error}");
+                let _ = error_window.upgrade_in_event_loop(move |window| {
+                    window.set_action_error_message(message.into());
+                });
+            }
         });
     }
 

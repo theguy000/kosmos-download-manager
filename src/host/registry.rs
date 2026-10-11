@@ -96,23 +96,48 @@ pub fn register_host(
         std::io::Error::new(std::io::ErrorKind::NotFound, "HOME directory not found")
     })?;
 
-    let targets = [
+    let manifest_paths = [
         home.join(".config/google-chrome/NativeMessagingHosts"),
         home.join(".config/chromium/NativeMessagingHosts"),
         home.join(".config/microsoft-edge/NativeMessagingHosts"),
         home.join(".config/BraveSoftware/Brave-Browser/NativeMessagingHosts"),
-    ];
+    ]
+    .map(|dir| dir.join(format!("{HOST_NAME}.json")));
 
-    let mut first_path = None;
-    for dir in &targets {
-        let manifest_path = dir.join(format!("{HOST_NAME}.json"));
-        let _ = write_manifest(&manifest_path, host_exe, &origins);
-        if first_path.is_none() {
-            first_path = Some(manifest_path);
+    write_manifests(&manifest_paths, host_exe, &origins)
+}
+
+/// Writes the manifest to each path. A path that fails is logged; the call fails only when
+/// none could be written, and otherwise returns the first path that was.
+#[cfg(any(not(windows), test))]
+fn write_manifests(
+    manifest_paths: &[PathBuf],
+    host_exe: &Path,
+    origins: &[String],
+) -> std::io::Result<PathBuf> {
+    let mut first_written = None;
+    let mut last_error = None;
+    for path in manifest_paths {
+        match write_manifest(path, host_exe, origins) {
+            Ok(()) => {
+                if first_written.is_none() {
+                    first_written = Some(path.clone());
+                }
+            }
+            Err(error) => {
+                eprintln!(
+                    "[kdm-host] Warning: could not write {}: {error}",
+                    path.display()
+                );
+                last_error = Some(error);
+            }
         }
     }
-
-    Ok(first_path.unwrap_or_else(|| PathBuf::from(format!("{HOST_NAME}.json"))))
+    match (first_written, last_error) {
+        (Some(path), _) => Ok(path),
+        (None, Some(error)) => Err(error),
+        (None, None) => Err(std::io::Error::other("no manifest locations")),
+    }
 }
 
 #[cfg(windows)]
@@ -137,6 +162,7 @@ fn reg(arguments: &[&str]) -> std::io::Result<std::process::ExitStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::TempFile;
 
     #[test]
     fn test_generate_manifest() {
@@ -148,6 +174,40 @@ mod tests {
         assert_eq!(val["type"], "stdio");
         assert_eq!(val["path"], exe.to_string_lossy().as_ref());
         assert_eq!(val["allowed_origins"][0], "chrome-extension://abc/");
+    }
+
+    #[test]
+    fn test_write_manifests_survives_one_unwritable_location() {
+        let blocker = TempFile::new("manifest-blocker");
+        std::fs::write(blocker.path(), b"a file, not a directory").unwrap();
+        let dir = TempFile::new("manifest-dir");
+        let blocked = blocker.path().join("manifest.json");
+        let good = dir.path().join("manifest.json");
+
+        let written = write_manifests(
+            &[blocked, good.clone()],
+            Path::new("host.exe"),
+            &default_allowed_origins(&[]),
+        )
+        .unwrap();
+
+        assert_eq!(written, good);
+        assert!(good.exists());
+        std::fs::remove_dir_all(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn test_write_manifests_fails_when_no_location_is_writable() {
+        let blocker = TempFile::new("manifest-blocker-all");
+        std::fs::write(blocker.path(), b"a file, not a directory").unwrap();
+
+        let result = write_manifests(
+            &[blocker.path().join("manifest.json")],
+            Path::new("host.exe"),
+            &default_allowed_origins(&[]),
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]
