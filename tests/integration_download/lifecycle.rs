@@ -1,4 +1,6 @@
-use crate::support::fixtures::{TEST_DATA_SIZE, generate_test_payload, wait_for_snapshot};
+use crate::support::fixtures::{
+    TEST_DATA_SIZE, generate_offset_payload, generate_test_payload, wait_for_snapshot,
+};
 use crate::support::http::{
     TestRange, is_head_request, requested_byte_range, start_local_server, write_range_response,
 };
@@ -357,7 +359,7 @@ async fn test_existing_directory_target_is_not_overwritten() {
 
 #[tokio::test]
 async fn test_pause_and_resume_download() {
-    let payload = generate_test_payload();
+    let payload = generate_offset_payload(2 * TEST_DATA_SIZE);
     let server_addr = start_mock_server(payload.clone()).await;
 
     let temp_dir = std::env::temp_dir();
@@ -508,7 +510,7 @@ async fn test_pause_during_connecting_restarts_metadata() {
 
 #[tokio::test]
 async fn test_progress_is_published_after_an_idle_period() {
-    let server_addr = start_mock_server(generate_test_payload()).await;
+    let server_addr = start_mock_server(generate_offset_payload(2 * TEST_DATA_SIZE)).await;
     let save_path =
         std::env::temp_dir().join(format!("kosmos_idle_test_{}.bin", std::process::id()));
     let _ = std::fs::remove_file(&save_path);
