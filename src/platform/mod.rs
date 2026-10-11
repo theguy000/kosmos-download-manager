@@ -17,7 +17,7 @@ fn environment_path(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Opens `path` with the system handler on Windows. No-op on other platforms.
+/// Opens `path` with the system handler. Only Windows is supported; other platforms report an error.
 #[cfg(windows)]
 pub(crate) fn open_file(path: &Path) -> std::io::Result<()> {
     if !path.exists() {
@@ -72,7 +72,10 @@ pub(crate) fn open_file(path: &Path) -> std::io::Result<()> {
 
 #[cfg(not(windows))]
 pub(crate) fn open_file(_path: &Path) -> std::io::Result<()> {
-    Ok(())
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "opening files is not supported on this platform",
+    ))
 }
 
 /// Brings the application window with the specified title to the foreground.

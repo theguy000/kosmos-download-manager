@@ -4,7 +4,6 @@ use crate::history::tests::TempFile;
 use crate::history::{HistoryStore, downloaded_label};
 use crate::settings::SaveSettings;
 use crate::ui::handlers::properties::{bind_properties_handlers, follow_active_download};
-use crate::ui::handlers::table::bind_table_handlers;
 use crate::ui::projection::HistoryTracker;
 use crate::ui::projection::{history_table_item, sort_items, update_window_state};
 use crate::ui::state::{ActiveDescription, AppState};
@@ -597,7 +596,7 @@ fn opening_a_missing_file_reports_it() -> Result<(), Box<dyn std::error::Error>>
         action_tx,
         snapshot_rx,
     );
-    bind_table_handlers(&ui, &state);
+    crate::ui::handlers::table::bind_table_handlers(&ui, &state);
 
     ui.set_selected_row(1);
     ui.invoke_open_file();
