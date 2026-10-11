@@ -400,7 +400,13 @@ async fn changed_metadata_restarts_from_zero_with_new_payload() {
     assert!(paused.resumable);
     let paused_file = std::fs::read(&save_path).unwrap();
     let written_bytes = paused_file.iter().take_while(|&&byte| byte == b'A').count() as u64;
-    assert_eq!(paused.downloaded_bytes, written_bytes);
+    // A write that finished just as Pause cancelled may be on disk but not yet counted.
+    // Counting bytes that are not on disk would be the real bug.
+    assert!(
+        paused.downloaded_bytes <= written_bytes,
+        "reported {} bytes but only {written_bytes} are on disk",
+        paused.downloaded_bytes
+    );
 
     let request_count_before_resume = observed_requests(&server.requests).len();
     action_tx.send(DownloadAction::Resume).await.unwrap();
