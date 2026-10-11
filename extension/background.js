@@ -43,7 +43,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     url: targetUrl,
     referrer: info.pageUrl || tab?.url
   });
-  if (response?.status !== "ok") {
+  if (response?.message === "browser_integration_disabled") {
+    notify("Browser integration is turned off. Turn it on in KDM Options > General.");
+  } else if (response?.status !== "ok") {
     console.warn("[KDM] Context menu download trigger failed:", response);
     notify("Could not reach KDM. Make sure the app is installed and registered.");
   }
