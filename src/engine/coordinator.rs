@@ -26,7 +26,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
-use tokio::time::Instant;
+use tokio::time::{Instant, MissedTickBehavior};
 
 #[derive(Debug, Error)]
 enum CoordinatorError {
@@ -170,6 +170,7 @@ async fn run_coordinator(
     let (cancel_tx, _) = watch::channel(false);
     let mut session = Session::new(worker_tx, worker_rx, info_tx, cancel_tx, snapshot_tx);
     let mut tick_interval = tokio::time::interval(Duration::from_millis(200));
+    tick_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
     loop {
         if session.restart_required {
@@ -190,7 +191,7 @@ async fn run_coordinator(
                     session.handle_worker(message).await;
                 }
             }
-            _ = tick_interval.tick() => session.tick(),
+            _ = tick_interval.tick(), if session.status == DownloadStatus::Downloading => session.tick(),
         }
     }
 }

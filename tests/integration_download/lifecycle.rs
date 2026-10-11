@@ -507,6 +507,38 @@ async fn test_pause_during_connecting_restarts_metadata() {
 }
 
 #[tokio::test]
+async fn test_progress_is_published_after_an_idle_period() {
+    let server_addr = start_mock_server(generate_test_payload()).await;
+    let save_path =
+        std::env::temp_dir().join(format!("kosmos_idle_test_{}.bin", std::process::id()));
+    let _ = std::fs::remove_file(&save_path);
+
+    let engine = DownloadEngine::new();
+    let mut snapshot_rx = engine.snapshot_rx();
+    tokio::time::sleep(Duration::from_millis(600)).await;
+
+    engine
+        .action_tx()
+        .send(DownloadAction::Start {
+            url: format!("http://{server_addr}/payload.bin"),
+            save_path: save_path.clone(),
+            num_chunks: 4,
+        })
+        .await
+        .unwrap();
+
+    wait_for_snapshot(
+        &mut snapshot_rx,
+        Duration::from_millis(1500),
+        "Progress was not published after the engine sat idle",
+        |snap| snap.status == DownloadStatus::Downloading && snap.downloaded_bytes > 0,
+    )
+    .await;
+
+    let _ = std::fs::remove_file(&save_path);
+}
+
+#[tokio::test]
 async fn test_non_range_pause_restarts_from_zero() {
     let payload = generate_test_payload();
     let server_addr = start_non_range_mock_server(payload.clone()).await;
