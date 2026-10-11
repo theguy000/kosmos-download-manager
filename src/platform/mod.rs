@@ -19,9 +19,12 @@ fn environment_path(name: &str) -> Option<PathBuf> {
 
 /// Opens `path` with the system handler on Windows. No-op on other platforms.
 #[cfg(windows)]
-pub(crate) fn open_file(path: &Path) {
+pub(crate) fn open_file(path: &Path) -> std::io::Result<()> {
     if !path.exists() {
-        return;
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "the file no longer exists",
+        ));
     }
 
     use std::ffi::OsStr;
@@ -35,7 +38,7 @@ pub(crate) fn open_file(path: &Path) {
     // SAFETY: ShellExecuteW is invoked with a valid, null-terminated UTF-16 path pointer.
     // Standard show flags (SW_SHOWNORMAL) are supplied, and execution is asynchronous.
     #[allow(unsafe_code)]
-    unsafe {
+    let result = unsafe {
         #[link(name = "shell32")]
         unsafe extern "system" {
             fn ShellExecuteW(
@@ -48,19 +51,29 @@ pub(crate) fn open_file(path: &Path) {
             ) -> isize;
         }
         const SW_SHOWNORMAL: i32 = 1;
-        let _ = ShellExecuteW(
+        ShellExecuteW(
             0,
             std::ptr::null(),
             wide_path.as_ptr(),
             std::ptr::null(),
             std::ptr::null(),
             SW_SHOWNORMAL,
-        );
+        )
+    };
+    // ShellExecuteW reports success with a value above 32.
+    if result > 32 {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "Windows could not open it (ShellExecute code {result})"
+        )))
     }
 }
 
 #[cfg(not(windows))]
-pub(crate) fn open_file(_path: &Path) {}
+pub(crate) fn open_file(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
 
 /// Brings the application window with the specified title to the foreground.
 pub(crate) fn bring_window_to_front(title: &str) {
@@ -319,6 +332,13 @@ mod tests {
             startup_value(Path::new(r"C:\Program Files\Kosmos\app.exe")),
             r#""C:\Program Files\Kosmos\app.exe""#
         );
+    }
+
+    #[test]
+    fn open_file_reports_a_missing_file() {
+        let missing = std::env::temp_dir().join("kosmos-test-open-file-missing");
+        let error = open_file(&missing).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
     }
 
     #[test]

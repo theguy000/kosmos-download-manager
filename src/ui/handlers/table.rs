@@ -147,8 +147,12 @@ pub(crate) fn bind_table_handlers(window: &MainWindow, state: &AppState) {
                     .get(selected)
                     .map(|entry| entry.save_path.clone())
             };
-            if let Some(path) = path {
-                open_file(&path);
+            if let Some(path) = path
+                && let Err(error) = open_file(&path)
+            {
+                window.set_action_error_message(
+                    format!("Could not open {}: {error}", path.display()).into(),
+                );
             }
         });
     }

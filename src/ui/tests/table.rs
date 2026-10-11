@@ -4,6 +4,7 @@ use crate::history::tests::TempFile;
 use crate::history::{HistoryStore, downloaded_label};
 use crate::settings::SaveSettings;
 use crate::ui::handlers::properties::{bind_properties_handlers, follow_active_download};
+use crate::ui::handlers::table::bind_table_handlers;
 use crate::ui::projection::HistoryTracker;
 use crate::ui::projection::{history_table_item, sort_items, update_window_state};
 use crate::ui::state::{ActiveDescription, AppState};
@@ -576,5 +577,31 @@ fn file_properties_dialog_supports_the_keyboard() -> Result<(), Box<dyn std::err
     assert!(!ui.get_show_properties_dialog(), "Cancel closes the dialog");
     assert_eq!(file.store().get(1).unwrap().description, "x");
 
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn opening_a_missing_file_reports_it() -> Result<(), Box<dyn std::error::Error>> {
+    let (_window, _clipboard) = install_test_platform()?;
+    let ui = MainWindow::new()?;
+    let history = TempFile::new("open-missing");
+    let mut entry = finished_entry(1, "gone.zip", 4);
+    entry.save_path = std::env::temp_dir().join("kosmos-test-open-missing.zip");
+    history.store().record(entry)?;
+    let (action_tx, _actions) = tokio::sync::mpsc::channel(1);
+    let (_snapshots, snapshot_rx) = tokio::sync::watch::channel(DownloadSnapshot::default());
+    let state = AppState::from_parts(
+        SaveSettings::default(),
+        history.store(),
+        action_tx,
+        snapshot_rx,
+    );
+    bind_table_handlers(&ui, &state);
+
+    ui.set_selected_row(1);
+    ui.invoke_open_file();
+
+    assert!(ui.get_action_error_message().contains("Could not open"));
     Ok(())
 }
